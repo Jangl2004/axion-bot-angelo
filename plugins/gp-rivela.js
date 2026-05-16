@@ -1,3 +1,5 @@
+import { downloadMediaMessage } from '@realvare/baileys'
+
 let handler = async (m, { conn }) => {
   try {
     if (!m.quoted) {
@@ -13,10 +15,25 @@ let handler = async (m, { conn }) => {
       return m.reply('*❌ 𝛥𝐗𝐈𝚶𝐍 𝐒𝐘𝐒𝐓𝐄𝐌: 𝐅𝐨𝐫𝐦𝐚𝐭𝐨 𝐧𝐨𝐧 𝐬𝐮𝐩𝐩𝐨𝐫𝐭𝐚𝐭𝐨.*')
     }
 
-    let buffer = await m.quoted.download().catch(() => null)
+    let quota = m.quoted.fakeObj || m.quoted
+    let messageToDownload = quota.message?.[mtype] ? quota.message : { [mtype]: m.quoted[mtype] }
+
+    let buffer = await downloadMediaMessage(
+      { message: messageToDownload, key: m.quoted.key },
+      'buffer',
+      {},
+      {
+        logger: console,
+        reconnectMode: 'always'
+      }
+    ).catch(() => null)
 
     if (!buffer || !buffer.length) {
-      return m.reply('*❌ 𝛥𝐗𝐈𝚶𝐍 𝐒𝐘𝐒𝐓𝐄𝐌: 𝐈𝐦𝐩𝐨𝐬𝐬𝐢𝐛𝐢𝐥𝐞 𝐬𝐜𝐚𝐫𝐢𝐜𝐚𝐫𝐞 𝐢𝐥 𝐜𝐨𝐧𝐭𝐞𝐧𝐮𝐭𝐨 (𝐌𝐞𝐝𝐢𝐚 𝐊𝐞𝐲 𝐬𝐜𝐚𝐝𝐮𝐭𝐚).*')
+      buffer = await m.quoted.download().catch(() => null)
+    }
+
+    if (!buffer || !buffer.length) {
+      return m.reply('*❌ 𝛥𝐗𝐈𝚶𝐍 𝐒𝐘𝐒𝐓𝐄𝐌: 𝐈𝐦𝐩𝐨𝐬𝐬𝐢𝐛𝐢𝐥𝐞 𝐬𝐜𝐚𝐫𝐢𝐜𝐚𝐫𝐞 𝐢𝐥 𝐜𝐨𝐧𝐭𝐞𝐧𝐮𝐭𝐨.*')
     }
 
     const caption = m.quoted?.caption || ''
