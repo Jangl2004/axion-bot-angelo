@@ -1,4 +1,4 @@
-// plugin by Bonzino (adapted)
+// plugin by Bonzino
 import { performance } from 'perf_hooks'
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -57,7 +57,7 @@ let handler = async (m, { conn }) => {
   const sent = await conn.sendMessage(
     chatId,
     {
-      text: `*Sfilo le mutandine a ${tag(destinatario)}... le labbra sono già calde e bagnate* 🤤`,
+      text: `*Ora faccio una sega a ${tag(destinatario)}...* 😏`,
       mentions: [destinatario]
     },
     { quoted: m }
@@ -66,22 +66,22 @@ let handler = async (m, { conn }) => {
   const key = sent?.key
   if (!key) return
 
-  await sleep(1500)
+  await sleep(2000)
 
   const frames = [
-    '*  ( { | } )  ✌🏻*   _(inizio a stimolare la clitoride...)_',
-    '*  ( { ✌🏻 } )*   _(le dita scivolano dentro...)_',
-    '*  ( { | } )💦 ✌🏻*   _(esco... cola il primo succo...)_',
-    '*  ( { ✌🏻💦 } )*   _(spingo più a fondo, ahh...)_',
-    '*  ( { | } )💦💦 ✌🏻*   _(la figa è completamente fradicia...)_',
-    '*  ( { ✌🏻🔥 } )*   _(ritmo serrato, la stringo forte...)_',
-    '*🥵 ( { ✌🏻🌊 } )*   _(ANIMA IL BACINO, STA VENENDO!!)_',
-    '*💦 ( { | } ) 🌊🌊 💦*'
+    '*8====👊D*',
+    '*8===👊=D*',
+    '*8==👊==D*',
+    '*8=👊===D*',
+    '*8=👊===D*',
+    '*8==👊==D*',
+    '*8===👊=D*',
+    "*8====👊D💦*"
   ]
 
   for (const f of frames) {
     await editMessage(conn, chatId, key, f, [destinatario])
-    const randomDelay = Math.floor(Math.random() * (600 - 200 + 1)) + 200
+    const randomDelay = Math.floor(Math.random() * (900 - 300 + 1)) + 300
     await sleep(randomDelay)
   }
 
@@ -92,14 +92,14 @@ let handler = async (m, { conn }) => {
     conn,
     chatId,
     key,
-`*🤤 Squirta l\'impossibile!! 🌊💦*\n\n${tag(mittente)} *ha letteralmente allagato la figa di ${tag(destinatario)} muovendo le dita a tempo record, facendola godere e spruzzare ovunque in soli ${elapsed} secondi! 🥵🔥🌊*`,
+`*🤤 Ohhsyy babyy* 🥵\n\n ${tag(mittente)} *ha fatto una sega a ${tag(destinatario)} e ha sborrato dappertutto in ${elapsed} secondi! 💦*`,
     [mittente, destinatario]
   )
 }
 
-handler.help = ['ditalino @utente']
+handler.help = ['segs @utente']
 handler.tags = ['fun']
-handler.command = ['ditalino', 'dtrd']
+handler.command = ['sega']
 handler.group = true
 
 export default handler
