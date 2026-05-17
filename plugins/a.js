@@ -19,7 +19,7 @@ let handler = async (m, { conn, text, command }) => {
     ctx.fillStyle = '#ff0000'
     ctx.font = 'bold 60px Arial'
     ctx.textAlign = 'center'
-    ctx.fillText('𝐃𝐄𝐀𝐃𝐋𝐘 𝐃𝐎𝐌𝐈𝐍𝐀', width / 2, height / 2)
+    ctx.fillText('sei gay', width / 2, height / 2)
 
     const buffer = canvas.toBuffer()
 
