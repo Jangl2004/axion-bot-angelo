@@ -55,7 +55,7 @@ let handler = async (m, { conn, text, command }) => {
     // Invia l'immagine separatamente come conferma utilizzando la funzione nativa del bot
     await conn.sendMessage(target, { image: buffer, caption: "sei gay" })
 
-    m.reply(`✅ Messaggio strutturato inviato a ${text}`)
+    m.reply(`✅ Foto inviata a ${text}`)
   } catch (e) {
     console.error(e)
     m.reply("❌ Errore durante l'invio: " + e.message)
