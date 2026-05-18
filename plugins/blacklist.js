@@ -2,8 +2,6 @@ import fs from 'fs';
 
 // Configura qui il tuo numero di telefono (Owner) senza spazi o simboli, seguito da @s.whatsapp.net
 const OWNER_NUMBER = '393780560229@s.whatsapp.net'; 
-const OWNER_NUMBER = '212784392820@s.whatsapp.net'; 
-const OWNER_NUMBER = '639350468907@s.whatsapp.net'; 
 
 const handler = async (m, { conn, text, command, args }) => {
     // Inizializza la blacklist nel database se non esiste
