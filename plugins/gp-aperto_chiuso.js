@@ -1,29 +1,26 @@
-// by 𝕯𝖊ⱥ𝖉𝖑𝐲 × Bonzino
+// aperto-chiuso by Bonzino
 
-let handler = async (m, { conn, command }) => {
-  let isOpen = command === 'aperto'
-
-  await conn.groupSettingUpdate(
-    m.chat,
-    isOpen ? 'not_announcement' : 'announcement'
-  )
-
-  const text = isOpen
-    ? `*『 🟢 』 𝐆𝐫𝐮𝐩𝐩𝐨 𝐚𝐩𝐞𝐫𝐭𝐨.*\n\n*𝐎𝐫𝐚 𝐭𝐮𝐭𝐭𝐢 𝐩𝐨𝐬𝐬𝐨𝐧𝐨 𝐬𝐜𝐫𝐢𝐯𝐞𝐫𝐞.*\n\n> 𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓`
-    : `*『 🔴 』 𝐆𝐫𝐮𝐩𝐩𝐨 𝐜𝐡𝐢𝐮𝐬𝐨.*\n\n*𝐒𝐨𝐥𝐨 𝐠𝐥𝐢 𝐚𝐝𝐦𝐢𝐧 𝐩𝐨𝐬𝐬𝐨𝐧𝐨 𝐬𝐜𝐫𝐢𝐯𝐞𝐫𝐞.*\n\n> 𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓`
-
-  await conn.sendMessage(m.chat, {
-    text,
-    contextInfo: {
-      ...(global.rcanal?.contextInfo || {})
-    }
-  }, { quoted: m })
+let handler=async(m,{conn,command})=>{
+const aperto=/^aperto$/i.test(command)
+await conn.groupSettingUpdate(
+m.chat,
+aperto?'not_announcement':'announcement'
+)
+await global.box(conn,m.chat,{
+text:'\n> 𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓',
+title:aperto
+?'ㅤ𝐂𝐡𝐚𝐭 𝐚𝐩𝐞𝐫𝐭𝐚 𝐚 𝐭𝐮𝐭𝐭𝐢 🟢'
+:'ㅤ𝐂𝐡𝐚𝐭 𝐬𝐨𝐥𝐨 𝐩𝐞𝐫 𝐚𝐝𝐦𝐢𝐧 🔴',
+body:' ',
+thumb:aperto?'aperto':'chiuso'
+},{quoted:m})
 }
 
-handler.help = ['aperto', 'chiuso']
-handler.tags = ['group']
-handler.command = /^(aperto|chiuso)$/i
-handler.admin = true
-handler.botAdmin = true
+handler.help=['aperto','chiuso']
+handler.tags=['group']
+handler.command=/^(aperto|chiuso)$/i
+handler.group=true
+handler.admin=true
+handler.botAdmin=true
 
 export default handler

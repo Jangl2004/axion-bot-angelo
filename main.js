@@ -15,6 +15,7 @@ import { spawn } from 'child_process';
 import lodash from 'lodash';
 import chalk from 'chalk';
 import './lib/groupwarn.js'
+import { getThumbBuffer } from './lib/thumb.js'
 import qrcode from 'qrcode-terminal'
 import { format } from 'util';
 import pino from 'pino';
@@ -48,6 +49,7 @@ const PORT = process.env.PORT || process.env.SERVER_PORT || 3000;
 protoType();
 serialize();
 
+// funzione x bottone copy universale
 global.sendCopy=async(conn,m,{text='',copy='',button='📋 𝐂𝐨𝐩𝐢𝐚'})=>{
 const msg=generateWAMessageFromContent(m.chat,{
 viewOnceMessage:{message:{
@@ -65,6 +67,29 @@ buttonParamsJson:JSON.stringify({display_text:button,copy_code:copy})
 }}
 },{quoted:m})
 await conn.relayMessage(m.chat,msg.message,{messageId:msg.key.id})
+}
+
+// funzione x box universale
+global.box=async(conn,chat,{text='ㅤ',title='ㅤㅤㅤ𝚫𝐗𝐈𝐎𝐍 • 𝐒𝐘𝐒𝐓𝐄𝐌',body='𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓',thumb='default'}={},options={})=>{
+let thumbnail=null
+try{
+thumbnail=await getThumbBuffer(thumb)
+}catch(e){
+console.log('[BOX THUMB ERROR]',thumb,e?.message||e)
+}
+return conn.sendMessage(chat,{
+text,
+contextInfo:{
+externalAdReply:{
+title,
+body,
+thumbnail,
+mediaType:1,
+renderLargerThumbnail:false,
+showAdAttribution:false
+}
+}
+},options)
 }
 
 global.isLogoPrinted = false;

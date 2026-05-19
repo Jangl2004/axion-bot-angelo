@@ -1,327 +1,240 @@
 // Plugin Classifiche by Bonzino
 
-const DELAY_TRA_GRUPPI_MS = 2000
-const PREMI_TOP10 = [500, 300, 200, 150, 100, 80, 60, 50, 40, 30]
+const DELAY_TRA_GRUPPI_MS=3000
+const PREMI_TOP10=[500,300,200,150,100,80,60,50,40,30]
+const delay=ms=>new Promise(r=>setTimeout(r,ms))
 
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
-
-function ensureChat(chat, oggi) {
-  const giornalieraVecchia = chat.classificaGiornaliera
-    ? JSON.parse(JSON.stringify(chat.classificaGiornaliera))
-    : null
-
-  const hasLegacyUsers = chat.users && Object.keys(chat.users).length > 0
-  const totalMissingOrTooLow =
-    !chat.classificaTotale ||
-    !chat.classificaTotale.utenti ||
-    (chat.classificaTotale.totali || 0) < (chat.classificaGiornaliera?.totali || 0)
-
-  if (totalMissingOrTooLow) {
-    let totale = {
-      totali: 0,
-      utenti: {}
-    }
-
-    if (hasLegacyUsers) {
-      for (const [jid, data] of Object.entries(chat.users)) {
-        const messaggi = data?.messages || 0
-        if (messaggi > 0) {
-          totale.utenti[jid] = { conteggio: messaggi }
-          totale.totali += messaggi
-        }
-      }
-    } else if (giornalieraVecchia?.utenti) {
-      totale.utenti = JSON.parse(JSON.stringify(giornalieraVecchia.utenti || {}))
-      totale.totali = giornalieraVecchia.totali || 0
-    }
-
-    chat.classificaTotale = totale
-  }
-
-  if (!chat.classificaGiornaliera || chat.classificaGiornaliera.ultimoReset !== oggi) {
-    chat.classificaGiornaliera = {
-      totali: 0,
-      utenti: {},
-      ultimoReset: oggi
-    }
-  }
-
-  if (!chat.topNotturna) {
-    chat.topNotturna = {
-      ultimoInvio: null,
-      inCorso: false
-    }
-  }
+function nowRoma(){
+return new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Rome'}))
 }
 
-function formatNumber(num) {
-  return new Intl.NumberFormat('it-IT').format(num || 0)
+function dataKeyRoma(date=nowRoma()){
+return date.toISOString().slice(0,10)
 }
 
-function getClassifica(utenti = {}, limite = 10) {
-  return Object.entries(utenti)
-    .filter(([_, data]) => (data?.conteggio || 0) > 0)
-    .sort((a, b) => (b[1]?.conteggio || 0) - (a[1]?.conteggio || 0))
-    .slice(0, limite)
+function dataLabelRoma(date=nowRoma()){
+return date.toLocaleDateString('it-IT')
 }
 
-async function inviaTopNotturna(conn, chatId, chatData, dataLabel) {
-  const classifica = getClassifica(chatData.classificaGiornaliera?.utenti || {}, 10)
-  if (!classifica.length) return
+function formatNumber(num){
+return new Intl.NumberFormat('it-IT').format(num||0)
+}
 
-  const medaglie = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
-  const menzioni = []
+function getClassifica(utenti={},limite=10){
+return Object.entries(utenti).filter(([_,d])=>(d?.conteggio||0)>0).sort((a,b)=>(b[1]?.conteggio||0)-(a[1]?.conteggio||0)).slice(0,limite)
+}
 
-  let testo = `╭━━━━━━━🌙━━━━━━━╮
+function ensureChat(chat,oggi){
+const giornalieraVecchia=chat.classificaGiornaliera?JSON.parse(JSON.stringify(chat.classificaGiornaliera)):null
+const hasLegacyUsers=chat.users&&Object.keys(chat.users).length>0
+const totalMissingOrTooLow=!chat.classificaTotale||!chat.classificaTotale.utenti||(chat.classificaTotale.totali||0)<(chat.classificaGiornaliera?.totali||0)
+
+if(totalMissingOrTooLow){
+let totale={totali:0,utenti:{}}
+if(hasLegacyUsers){
+for(const[jid,data]of Object.entries(chat.users)){
+const messaggi=data?.messages||0
+if(messaggi>0){
+totale.utenti[jid]={conteggio:messaggi}
+totale.totali+=messaggi
+}
+}
+}else if(giornalieraVecchia?.utenti){
+totale.utenti=JSON.parse(JSON.stringify(giornalieraVecchia.utenti||{}))
+totale.totali=giornalieraVecchia.totali||0
+}
+chat.classificaTotale=totale
+}
+
+if(!chat.classificaGiornaliera){
+chat.classificaGiornaliera={totali:0,utenti:{},ultimoReset:oggi}
+}
+
+if(!chat.topNotturna){
+chat.topNotturna={ultimoInvio:null,inCorso:false}
+}
+}
+
+async function inviaTopNotturna(conn,chatId,chatData,dataLabel){
+const classifica=getClassifica(chatData.classificaGiornaliera?.utenti||{},10)
+if(!classifica.length)return false
+
+const medaglie=['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟']
+const menzioni=[]
+
+let testo=`*╭━━━━━━━🌙━━━━━━━╮*
 *✦ 𝐓𝐎𝐏 𝟏𝟎 𝐆𝐈𝐎𝐑𝐍𝐀𝐋𝐈𝐄𝐑𝐀 ✦*
-╰━━━━━━━🌙━━━━━━━╯
+*╰━━━━━━━🌙━━━━━━━╯*
 
 *📅 𝐆𝐢𝐨𝐫𝐧𝐨:* *${dataLabel}*
-*📊 𝐌𝐞𝐬𝐬𝐚𝐠𝐠𝐢 𝐭𝐨𝐭𝐚𝐥𝐢:* *${formatNumber(chatData.classificaGiornaliera?.totali || 0)}*
+*📊 𝐌𝐞𝐬𝐬𝐚𝐠𝐠𝐢 𝐭𝐨𝐭𝐚𝐥𝐢:* *${formatNumber(chatData.classificaGiornaliera?.totali||0)}*
 
 *──────────────*`
 
-  classifica.forEach(([jid, data], i) => {
-    const premio = PREMI_TOP10[i] || 0
-    const user = global.db.data.users[jid] || (global.db.data.users[jid] = {})
-    if (typeof user.euro !== 'number') user.euro = 0
-    user.euro += premio
+for(let i=0;i<classifica.length;i++){
+const[jid,data]=classifica[i]
+const premio=PREMI_TOP10[i]||0
+const user=global.db.data.users[jid]||(global.db.data.users[jid]={})
+if(typeof user.euro!=='number')user.euro=0
+user.euro+=premio
+menzioni.push(jid)
 
-    menzioni.push(jid)
+testo+=`
 
-    testo += `
-
-*${medaglie[i]}* *@${jid.split('@')[0]}* • *${formatNumber(data?.conteggio || 0)} 𝐦𝐞𝐬𝐬𝐚𝐠𝐠𝐢*
+*${medaglie[i]}* *@${jid.split('@')[0]}* • *${formatNumber(data?.conteggio||0)} 𝐦𝐞𝐬𝐬𝐚𝐠𝐠𝐢*
 *💸 𝐏𝐫𝐞𝐦𝐢𝐨:* *+${formatNumber(premio)}€*`
-  })
+}
 
-  testo += `
+testo+=`
 
 *──────────────*
 *🔥 𝐋𝐚 𝐠𝐢𝐨𝐫𝐧𝐚𝐭𝐚 è 𝐭𝐞𝐫𝐦𝐢𝐧𝐚𝐭𝐚, 𝐝𝐚 𝐨𝐫𝐚 𝐬𝐢 𝐫𝐢𝐩𝐚𝐫𝐭𝐞!*
 *⏳ 𝐍𝐮𝐨𝐯𝐚 𝐜𝐥𝐚𝐬𝐬𝐢𝐟𝐢𝐜𝐚, 𝐧𝐮𝐨𝐯𝐚 𝐬𝐟𝐢𝐝𝐚.*`
 
-  await conn.sendMessage(chatId, {
-    text: testo,
-    mentions: menzioni,
-    footer: '𝐏𝐫𝐞𝐦𝐢 𝐠𝐢𝐨𝐫𝐧𝐚𝐥𝐢𝐞𝐫𝐢 𝐚𝐬𝐬𝐞𝐠𝐧𝐚𝐭𝐢✅️',
-    buttons: [
-      { buttonId: `.top`, buttonText: { displayText: 'Top Oggi' }, type: 1 },
-      { buttonId: `.topall`, buttonText: { displayText: 'TopAll' }, type: 1 }
-    ],
-    headerType: 1
-  })
+await conn.sendMessage(chatId,{
+text:testo,
+mentions:menzioni,
+footer:'𝐏𝐫𝐞𝐦𝐢 𝐠𝐢𝐨𝐫𝐧𝐚𝐥𝐢𝐞𝐫𝐢 𝐚𝐬𝐬𝐞𝐠𝐧𝐚𝐭𝐢✅️',
+buttons:[
+{buttonId:'.top',buttonText:{displayText:'Top Oggi'},type:1},
+{buttonId:'.topall',buttonText:{displayText:'TopAll'},type:1}
+],
+headerType:1
+})
+
+return true
 }
 
-async function processaTopNotturnaSeNecessaria(conn, currentChatId) {
-  const now = new Date()
-  const ora = now.getHours()
-  const minuto = now.getMinutes()
+async function processaTopNotturnaSeNecessaria(conn,currentChatId=null,force=false){
+const now=nowRoma()
+const ora=now.getHours()
+const minuto=now.getMinutes()
 
-  if (ora !== 0 || minuto > 10) return
+if(!force&&(ora!==0||minuto>20))return
 
-  const dataOggi = now.toDateString()
+const dataOggi=dataKeyRoma(now)
+const ieri=new Date(now)
+ieri.setDate(ieri.getDate()-1)
+const dataIeri=dataLabelRoma(ieri)
 
-  const ieri = new Date(now)
-  ieri.setDate(ieri.getDate() - 1)
+const chats=global.db.data.chats||{}
+const keys=Object.keys(chats).filter(id=>id.endsWith('@g.us'))
 
-  const dataIeri = ieri.toLocaleDateString('it-IT')
+for(const chatId of keys){
+const chat=chats[chatId]
+if(!chat)continue
 
-  const chats = global.db.data.chats || {}
+ensureChat(chat,dataOggi)
 
-  const keys = Object.keys(chats)
-    .filter(id => id.endsWith('@g.us'))
+if(chat.topNotturna.ultimoInvio===dataOggi)continue
+if(chat.topNotturna.inCorso)continue
 
-  for (const chatId of keys) {
-    const chat = chats[chatId]
+const classificaVecchia=chat.classificaGiornaliera
+if(!classificaVecchia||classificaVecchia.ultimoReset===dataOggi)continue
 
-    if (!chat) continue
+chat.topNotturna.inCorso=true
 
-    if (!chat.topNotturna) {
-      chat.topNotturna = {
-        ultimoInvio: null,
-        inCorso: false
-      }
-    }
+try{
+if(chatId!==currentChatId)await delay(DELAY_TRA_GRUPPI_MS)
 
-    if (chat.topNotturna.ultimoInvio === dataOggi) {
-      continue
-    }
-
-    if (chat.topNotturna.inCorso) {
-      continue
-    }
-
-    const classificaVecchia = chat.classificaGiornaliera
-
-    if (
-      !classificaVecchia ||
-      classificaVecchia.ultimoReset === dataOggi
-    ) continue
-
-    if ((classificaVecchia.totali || 0) <= 0) {
-
-      chat.topNotturna.ultimoInvio = dataOggi
-
-      chat.classificaGiornaliera = {
-        totali: 0,
-        utenti: {},
-        ultimoReset: dataOggi
-      }
-
-      continue
-    }
-
-    chat.topNotturna.inCorso = true
-
-    try {
-
-      if (chatId !== currentChatId) {
-        await delay(DELAY_TRA_GRUPPI_MS)
-      }
-
-      const metadata = await conn.groupMetadata(chatId)
-        .catch(() => null)
-
-      if (!metadata) {
-        console.log('[TOP NOTTURNA] Gruppo non trovato:', chatId)
-
-        chat.topNotturna.ultimoInvio = dataOggi
-
-        continue
-      }
-
-      const botNumero = conn.user?.id?.split(':')[0] + '@s.whatsapp.net'
-
-      const partecipa = metadata.participants
-        ?.some(p => p.id === botNumero)
-
-      if (!partecipa) {
-        console.log('[TOP NOTTURNA] Bot non presente:', chatId)
-
-        chat.topNotturna.ultimoInvio = dataOggi
-
-        continue
-      }
-
-      await inviaTopNotturna(
-        conn,
-        chatId,
-        chat,
-        dataIeri
-      )
-
-      chat.classificaGiornaliera = {
-        totali: 0,
-        utenti: {},
-        ultimoReset: dataOggi
-      }
-
-      chat.topNotturna.ultimoInvio = dataOggi
-
-      console.log('[TOP NOTTURNA] Inviata:', chatId)
-
-    } catch (e) {
-
-      console.error(
-        '[TOP NOTTURNA ERROR]',
-        chatId,
-        e?.message || e
-      )
-
-      if (
-        String(e?.message || '').includes('item-not-found') ||
-        String(e?.message || '').includes('forbidden') ||
-        String(e?.data || '').includes('403') ||
-        String(e?.data || '').includes('404')
-      ) {
-
-        console.log(
-          '[TOP NOTTURNA] Skip gruppo rotto:',
-          chatId
-        )
-
-        chat.topNotturna.ultimoInvio = dataOggi
-      }
-
-    } finally {
-
-      chat.topNotturna.inCorso = false
-    }
-  }
+if((classificaVecchia.totali||0)<=0){
+chat.classificaGiornaliera={totali:0,utenti:{},ultimoReset:dataOggi}
+chat.topNotturna.ultimoInvio=dataOggi
+continue
 }
 
-let handler = async (m, { conn, command, usedPrefix, isAdmin, isOwner }) => {
-  if (!global.db.data.chats[m.chat]) global.db.data.chats[m.chat] = {}
+const metadata=await conn.groupMetadata(chatId).catch(()=>null)
+if(!metadata){
+console.log('[TOP NOTTURNA] Gruppo non trovato:',chatId)
+chat.topNotturna.ultimoInvio=dataOggi
+continue
+}
 
-  let chat = global.db.data.chats[m.chat]
-  let oggi = new Date().toDateString()
+await inviaTopNotturna(conn,chatId,chat,dataIeri)
 
-  ensureChat(chat, oggi)
+chat.classificaGiornaliera={totali:0,utenti:{},ultimoReset:dataOggi}
+chat.topNotturna.ultimoInvio=dataOggi
 
-  if (command === 'resettp') {
-    if (!isAdmin && !isOwner && !m.fromMe) {
-      return m.reply(`╭━━━━━━━🔒━━━━━━━╮
+console.log('[TOP NOTTURNA] Inviata:',chatId)
+
+}catch(e){
+console.error('[TOP NOTTURNA ERROR]',chatId,e?.message||e)
+}finally{
+chat.topNotturna.inCorso=false
+}
+}
+}
+
+if(!global.__topNotturnaInterval){
+global.__topNotturnaInterval=setInterval(async()=>{
+try{
+if(global.conn?.user&&global.db?.data){
+await processaTopNotturnaSeNecessaria(global.conn,null,false)
+}
+}catch(e){
+console.error('[TOP NOTTURNA INTERVAL ERROR]',e?.message||e)
+}
+},60*1000)
+}
+
+let handler=async(m,{conn,command,usedPrefix,isAdmin,isOwner})=>{
+if(!global.db.data.chats[m.chat])global.db.data.chats[m.chat]={}
+
+let chat=global.db.data.chats[m.chat]
+let oggi=dataKeyRoma()
+
+ensureChat(chat,oggi)
+
+if(command==='resettp'){
+if(!isAdmin&&!isOwner&&!m.fromMe)return m.reply(`*╭━━━━━━━🔒━━━━━━━╮*
 *✦ 𝐀𝐂𝐂𝐄𝐒𝐒𝐎 𝐍𝐄𝐆𝐀𝐓𝐎 ✦*
-╰━━━━━━━🔒━━━━━━━╯
+*╰━━━━━━━🔒━━━━━━━╯*
 
 *❌ 𝐒𝐨𝐥𝐨 𝐚𝐝𝐦𝐢𝐧 𝐨 𝐨𝐰𝐧𝐞𝐫 𝐩𝐨𝐬𝐬𝐨𝐧𝐨 𝐫𝐞𝐬𝐞𝐭𝐭𝐚𝐫𝐞 𝐥𝐚 𝐜𝐥𝐚𝐬𝐬𝐢𝐟𝐢𝐜𝐚*`)
-    }
 
-    chat.classificaGiornaliera = {
-      totali: 0,
-      utenti: {},
-      ultimoReset: oggi
-    }
+chat.classificaGiornaliera={totali:0,utenti:{},ultimoReset:oggi}
 
-    return m.reply(`╭━━━━━━━🔄━━━━━━━╮
+return m.reply(`*╭━━━━━━━🔄━━━━━━━╮*
 *✦ 𝐑𝐄𝐒𝐄𝐓 ✦*
-╰━━━━━━━🔄━━━━━━━╯
+*╰━━━━━━━🔄━━━━━━━╯*
 
 *✅ 𝐂𝐥𝐚𝐬𝐬𝐢𝐟𝐢𝐜𝐚 𝐠𝐢𝐨𝐫𝐧𝐚𝐥𝐢𝐞𝐫𝐚 𝐫𝐞𝐬𝐞𝐭𝐭𝐚𝐭𝐚*`)
-  }
+}
 
-  const isAll = /^topall/i.test(command)
+if(command==='topnight'){
+if(!isOwner&&!m.fromMe)return m.reply('*❌ 𝐒𝐨𝐥𝐨 𝐨𝐰𝐧𝐞𝐫.*')
+await processaTopNotturnaSeNecessaria(conn,m.chat,true)
+return m.reply('*✅ 𝐂𝐨𝐧𝐭𝐫𝐨𝐥𝐥𝐨 𝐭𝐨𝐩 𝐧𝐨𝐭𝐭𝐮𝐫𝐧𝐚 𝐞𝐬𝐞𝐠𝐮𝐢𝐭𝐨.*')
+}
 
-  let limite = 3
-  if (command.includes('5')) limite = 5
-  if (command.includes('10')) limite = 10
+const isAll=/^topall/i.test(command)
+let limite=3
+if(command.includes('5'))limite=5
+if(command.includes('10'))limite=10
 
-  const dati = isAll
-    ? (chat.classificaTotale || { totali: 0, utenti: {} })
-    : (chat.classificaGiornaliera || { totali: 0, utenti: {} })
+const dati=isAll?(chat.classificaTotale||{totali:0,utenti:{}}):(chat.classificaGiornaliera||{totali:0,utenti:{}})
+const totaleMessaggi=dati.totali||0
 
-  const totaleMessaggi = dati.totali || 0
-
-  if (!totaleMessaggi) {
-    return m.reply(`╭━━━━━━━📊━━━━━━━╮
+if(!totaleMessaggi)return m.reply(`*╭━━━━━━━📊━━━━━━━╮*
 *✦ 𝐂𝐋𝐀𝐒𝐒𝐈𝐅𝐈𝐂𝐀 ✦*
-╰━━━━━━━📊━━━━━━━╯
+*╰━━━━━━━📊━━━━━━━╯*
 
 *❌ 𝐍𝐞𝐬𝐬𝐮𝐧 𝐦𝐞𝐬𝐬𝐚𝐠𝐠𝐢𝐨*`)
-  }
 
-  const classifica = Object.entries(dati.utenti || {})
-    .filter(([_, data]) => (data?.conteggio || 0) > 0)
-    .sort((a, b) => (b[1]?.conteggio || 0) - (a[1]?.conteggio || 0))
-    .slice(0, limite)
+const classifica=getClassifica(dati.utenti||{},limite)
 
-  if (!classifica.length) {
-    return m.reply(`╭━━━━━━━📊━━━━━━━╮
+if(!classifica.length)return m.reply(`*╭━━━━━━━📊━━━━━━━╮*
 *✦ 𝐂𝐋𝐀𝐒𝐒𝐈𝐅𝐈𝐂𝐀 ✦*
-╰━━━━━━━📊━━━━━━━╯
+*╰━━━━━━━📊━━━━━━━╯*
 
 *❌ 𝐍𝐞𝐬𝐬𝐮𝐧 𝐦𝐞𝐬𝐬𝐚𝐠𝐠𝐢𝐨*`)
-  }
 
-  const medaglie = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
-  const titolo = isAll
-    ? '*🌐 𝐂𝐋𝐀𝐒𝐒𝐈𝐅𝐈𝐂𝐀 𝐆𝐋𝐎𝐁𝐀𝐋𝐄*'
-    : '*⏳ 𝐂𝐋𝐀𝐒𝐒𝐈𝐅𝐈𝐂𝐀 𝐃𝐈 𝐎𝐆𝐆𝐈*'
+const medaglie=['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟']
+const titolo=isAll?'*🌐 𝐂𝐋𝐀𝐒𝐒𝐈𝐅𝐈𝐂𝐀 𝐆𝐋𝐎𝐁𝐀𝐋𝐄*':'*⏳ 𝐂𝐋𝐀𝐒𝐒𝐈𝐅𝐈𝐂𝐀 𝐃𝐈 𝐎𝐆𝐆𝐈*'
 
-  let testo = `╭━━━━━━━📊━━━━━━━╮
+let testo=`*╭━━━━━━━📊━━━━━━━╮*
 *✦ 𝐂𝐋𝐀𝐒𝐒𝐈𝐅𝐈𝐂𝐀 ✦*
-╰━━━━━━━📊━━━━━━━╯
+*╰━━━━━━━📊━━━━━━━╯*
 
 ${titolo}
 
@@ -329,118 +242,89 @@ ${titolo}
 
 *──────────────*`
 
-  let menzioni = classifica.map(([jid]) => jid).filter(Boolean)
+let menzioni=classifica.map(([jid])=>jid).filter(Boolean)
 
-  classifica.forEach(([jid, data], i) => {
-    const posizione = i + 1
-    const medaglia = medaglie[i] || '🏅'
+classifica.forEach(([jid,data],i)=>{
+testo+=`
 
-    testo += `
+*${medaglie[i]||'🏅'} ${i+1}°* *@${jid.split('@')[0]}* • *${formatNumber(data?.conteggio||0)} 𝐦𝐞𝐬𝐬𝐚𝐠𝐠𝐢*`
+})
 
-*${medaglia} ${posizione}°* *@${jid.split('@')[0]}* • *${formatNumber(data?.conteggio || 0)} 𝐦𝐞𝐬𝐬𝐚𝐠𝐠𝐢*`
-  })
-
-  testo += `
+testo+=`
 
 *──────────────*
-${isAll
-    ? `*⏳ 𝐏𝐞𝐫 𝐥𝐚 𝐜𝐥𝐚𝐬𝐬𝐢𝐟𝐢𝐜𝐚 𝐝𝐢 𝐨𝐠𝐠𝐢: ${usedPrefix}top*`
-    : `*🌐 𝐏𝐞𝐫 𝐥𝐚 𝐜𝐥𝐚𝐬𝐬𝐢𝐟𝐢𝐜𝐚 𝐬𝐭𝐨𝐫𝐢𝐜𝐚: ${usedPrefix}topall*`}`
+${isAll?`*⏳ 𝐏𝐞𝐫 𝐥𝐚 𝐜𝐥𝐚𝐬𝐬𝐢𝐟𝐢𝐜𝐚 𝐝𝐢 𝐨𝐠𝐠𝐢: ${usedPrefix}top*`:`*🌐 𝐏𝐞𝐫 𝐥𝐚 𝐜𝐥𝐚𝐬𝐬𝐢𝐟𝐢𝐜𝐚 𝐬𝐭𝐨𝐫𝐢𝐜𝐚: ${usedPrefix}topall*`}`
 
-  let buttons = []
+let buttons=[]
 
-  if (isAll) {
-    if (limite === 3) {
-      buttons.push(
-        { buttonId: `${usedPrefix}topall5`, buttonText: { displayText: 'TopAll 5' }, type: 1 },
-        { buttonId: `${usedPrefix}topall10`, buttonText: { displayText: 'TopAll 10' }, type: 1 }
-      )
-    } else if (limite === 5) {
-      buttons.push(
-        { buttonId: `${usedPrefix}topall`, buttonText: { displayText: 'TopAll 3' }, type: 1 },
-        { buttonId: `${usedPrefix}topall10`, buttonText: { displayText: 'TopAll 10' }, type: 1 }
-      )
-    } else {
-      buttons.push(
-        { buttonId: `${usedPrefix}topall`, buttonText: { displayText: 'TopAll 3' }, type: 1 },
-        { buttonId: `${usedPrefix}top`, buttonText: { displayText: 'Top Oggi' }, type: 1 }
-      )
-    }
-  } else {
-    if (limite === 3) {
-      buttons.push(
-        { buttonId: `${usedPrefix}top5`, buttonText: { displayText: 'Top 5' }, type: 1 },
-        { buttonId: `${usedPrefix}top10`, buttonText: { displayText: 'Top 10' }, type: 1 },
-        { buttonId: `${usedPrefix}topall`, buttonText: { displayText: 'TopAll' }, type: 1 }
-      )
-    } else if (limite === 5) {
-      buttons.push(
-        { buttonId: `${usedPrefix}top`, buttonText: { displayText: 'Top 3' }, type: 1 },
-        { buttonId: `${usedPrefix}top10`, buttonText: { displayText: 'Top 10' }, type: 1 }
-      )
-    } else {
-      buttons.push(
-        { buttonId: `${usedPrefix}top`, buttonText: { displayText: 'Top 3' }, type: 1 },
-        { buttonId: `${usedPrefix}topall`, buttonText: { displayText: 'TopAll' }, type: 1 }
-      )
-    }
-  }
-
-  await conn.sendMessage(m.chat, {
-    text: testo,
-    mentions: menzioni,
-    footer: isAll
-      ? 'Classifica storica del gruppo'
-      : 'Classifica giornaliera del gruppo',
-    buttons,
-    headerType: 1
-  }, { quoted: m })
+if(isAll){
+if(limite===3)buttons.push(
+{buttonId:`${usedPrefix}topall5`,buttonText:{displayText:'TopAll 5'},type:1},
+{buttonId:`${usedPrefix}topall10`,buttonText:{displayText:'TopAll 10'},type:1}
+)
+else if(limite===5)buttons.push(
+{buttonId:`${usedPrefix}topall`,buttonText:{displayText:'TopAll 3'},type:1},
+{buttonId:`${usedPrefix}topall10`,buttonText:{displayText:'TopAll 10'},type:1}
+)
+else buttons.push(
+{buttonId:`${usedPrefix}topall`,buttonText:{displayText:'TopAll 3'},type:1},
+{buttonId:`${usedPrefix}top`,buttonText:{displayText:'Top Oggi'},type:1}
+)
+}else{
+if(limite===3)buttons.push(
+{buttonId:`${usedPrefix}top5`,buttonText:{displayText:'Top 5'},type:1},
+{buttonId:`${usedPrefix}top10`,buttonText:{displayText:'Top 10'},type:1},
+{buttonId:`${usedPrefix}topall`,buttonText:{displayText:'TopAll'},type:1}
+)
+else if(limite===5)buttons.push(
+{buttonId:`${usedPrefix}top`,buttonText:{displayText:'Top 3'},type:1},
+{buttonId:`${usedPrefix}top10`,buttonText:{displayText:'Top 10'},type:1}
+)
+else buttons.push(
+{buttonId:`${usedPrefix}top`,buttonText:{displayText:'Top 3'},type:1},
+{buttonId:`${usedPrefix}topall`,buttonText:{displayText:'TopAll'},type:1}
+)
 }
 
-handler.before = async function (m, { conn }) {
-  if (!m.chat || !m.text || m.isBaileys || !m.isGroup) return
-
-  if (!global.db.data.chats[m.chat]) global.db.data.chats[m.chat] = {}
-
-  let chat = global.db.data.chats[m.chat]
-  let oggi = new Date().toDateString()
-
-  if (!chat.classificaGiornaliera || !chat.topNotturna || !chat.classificaTotale) {
-    ensureChat(chat, oggi)
-  }
-
-  await processaTopNotturnaSeNecessaria(conn, m.chat)
-
-  if (!chat.classificaGiornaliera || chat.classificaGiornaliera.ultimoReset !== oggi) {
-    chat.classificaGiornaliera = {
-      totali: 0,
-      utenti: {},
-      ultimoReset: oggi
-    }
-  }
-
-  let giornaliera = chat.classificaGiornaliera
-  giornaliera.totali++
-
-  if (!giornaliera.utenti[m.sender]) {
-    giornaliera.utenti[m.sender] = { conteggio: 0 }
-  }
-
-  giornaliera.utenti[m.sender].conteggio++
-
-  let totale = chat.classificaTotale
-  totale.totali++
-
-  if (!totale.utenti[m.sender]) {
-    totale.utenti[m.sender] = { conteggio: 0 }
-  }
-
-  totale.utenti[m.sender].conteggio++
+await conn.sendMessage(m.chat,{
+text:testo,
+mentions:menzioni,
+footer:isAll?'Classifica storica del gruppo':'Classifica giornaliera del gruppo',
+buttons,
+headerType:1
+},{quoted:m})
 }
 
-handler.command = /^(top|top5|top10|topall|topall5|topall10|resettp)$/i
-handler.group = true
-handler.tags = ['group']
-handler.help = ['top', 'top5', 'top10', 'topall', 'topall5', 'topall10', 'resettp']
+handler.before=async function(m,{conn}){
+if(!m.chat||!m.text||m.isBaileys||!m.isGroup)return
+
+if(!global.db.data.chats[m.chat])global.db.data.chats[m.chat]={}
+
+let chat=global.db.data.chats[m.chat]
+let oggi=dataKeyRoma()
+
+ensureChat(chat,oggi)
+
+await processaTopNotturnaSeNecessaria(conn,m.chat,false)
+
+if(!chat.classificaGiornaliera||chat.classificaGiornaliera.ultimoReset!==oggi){
+chat.classificaGiornaliera={totali:0,utenti:{},ultimoReset:oggi}
+}
+
+let giornaliera=chat.classificaGiornaliera
+giornaliera.totali++
+giornaliera.utenti[m.sender]??={conteggio:0}
+giornaliera.utenti[m.sender].conteggio++
+
+let totale=chat.classificaTotale
+totale.totali++
+totale.utenti[m.sender]??={conteggio:0}
+totale.utenti[m.sender].conteggio++
+}
+
+handler.command=/^(top|top5|top10|topall|topall5|topall10|resettp|topnight)$/i
+handler.group=true
+handler.tags=['group']
+handler.help=['top','top5','top10','topall','topall5','topall10','resettp','topnight']
 
 export default handler
