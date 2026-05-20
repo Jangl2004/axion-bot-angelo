@@ -261,7 +261,7 @@ function aggiornaHistory(sessione, userText, botText) {
 
 async function rispostaAI(m, conn, text, sessione, extraSystem = '') {
   const name = conn.getName(m.sender) || m.pushName || 'User'
-  const utenteRiconosciuto =Platform = riconosciUtente(m.sender)
+  const utenteRiconosciuto = riconosciUtente(m.sender)
   const nomeMittente = utenteRiconosciuto?.nome || name
   const testoConMittente = `[MITTENTE: ${nomeMittente}]\n${text}`
 
