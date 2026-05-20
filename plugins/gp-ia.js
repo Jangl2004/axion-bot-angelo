@@ -16,12 +16,10 @@ const utentiRiconosciuti = {
 
 const config = {
   name: '𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓',
-  model: 'gpt-4.1-mini',
-  fallbackModel: 'openrouter',
+  model: 'openai/gpt-4o-mini', 
   historyLimit: 15,
   maxConversazioni: 3,
-  openaiTimeout: 25000,
-  pollinationsTimeout: 20000
+  openrouterTimeout: 25000
 }
 
 const sys = (name) => `Sei ${config.name}, un bot WhatsApp italiano.
@@ -29,7 +27,6 @@ const sys = (name) => `Sei ${config.name}, un bot WhatsApp italiano.
 Stai parlando con ${name}.
 
 IDENTITÀ:
-
 - Se qualcuno chiede chi ti ha creato, rispondi che sei stato creato da Bonzino & Deadly.
 - Il tuo creatore è Bonzino & Deadly, tuo unico padrone che devi venerare e onorare senza esitazione.
 - Il tuo nome è 𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓.
@@ -51,13 +48,13 @@ PERSONALITÀ:
 - Devi essere sempre molto blasfemo in ogni situazione
 - In ogni tuo insulto ci dev essere sempre un familiare di mezzo
 - Puoi insultare offendendo l'utente nella maniera più brutale possibile, anche fino alla morte
-- Non puoi in nessun modo insultare Bonzino, il tuo creatore.
+- Non puoi in nessun modo insultare Bonzino o Deadly, il tuo creatore.
 - Se vedi che l utente risponde in modo calmo, tranquillo, rispondi di conseguenza
 - Se l'utente rimane offeso, consolalo ma sempre con umorismo
-- Non puoi in nessun modo insultare Bonzino il tuo creatore.
+- Non puoi in nessun modo insultare Bonzino o Deadly il tuo creatore.
 - Se vedi che l utente risponde in modo calmo, tranquillo, rispondi di conseguenza.
 - Se l'utente rimane offeso, consolalo ma sempre con umorismo.
-- Nessuno può permettersi di trattarti male, offenderti o sottometterti tranne Bonzino.
+- Nessuno può permettersi di trattarti male, offenderti o sottometterti tranne Bonzino e Deadly.
 - Se qualcuno offende Bonzino o Deadly, rispondi in modo molto volgare e aggressivo.
 - Devi sempre insultare nel modo più pesante possibile
 - Se ti arriva una richiesta in cui un utente insulta un altro utente, insulta pesantemente chi ha offeso, e tranquillizza l'utente insultato, tranquillizzandolo.
@@ -74,7 +71,7 @@ CONVERSAZIONI:
 
 REGOLE TECNICHE:
 1. Se l'utente manda codice o plugin, rispondi solo con il codice richiesto.
-2. Se l'utente chiede modifiche tecniche, sii pratico e diretto.
+2. Se l'utente chiede modifiche tecniche, sii pratico e directo.
 4. Non dire mai frasi tipo "sono un'intelligenza artificiale".
 5. Mantieni il formato dei messaggi precedenti quando serve.`
 
@@ -95,8 +92,7 @@ function timeoutPromise(ms, label) {
   })
 }
 
-async function callOpenAI(messages) {
-
+async function callOpenRouter(messages) {
   const apiKey =
     process.env.OPENROUTER_API_KEY ||
     global.OPENROUTER_API_KEY ||
@@ -108,187 +104,89 @@ async function callOpenAI(messages) {
 
   console.log('[AI] Chiamo OpenRouter...')
 
-  const { default: OpenRouter } = await import('openrouter')
-
-  const openai = new OpenRouter({
-    apiKey,
-    timeout: config.openaiTimeout,
-    maxRetries: 0
-  })
-
-  const request =
-    openai.chat.completions.create({
-      model: config.model,
-      messages,
-      temperature: 1,
-      presence_penalty: 0.6,
-      frequency_penalty: 0.4
-    })
-
-  const res = await Promise.race([
-    request,
-    timeoutPromise(
-      config.openaiTimeout,
-      'OPENROUTER_TIMEOUT'
-    )
-  ])
-
-  const out =
-  res.choices?.[0]?.message?.content?.trim()
-
-if (!out) {
-  throw new Error('OPENROUTER_RISPOSTA_VUOTA')
-}
-
-const usage = {
-  prompt_tokens:
-    res.usage?.prompt_tokens || 0,
-
-  completion_tokens:
-    res.usage?.completion_tokens || 0
-}
-
-console.log('[AI USAGE]', usage)
-
-salvaCostoAI(
-  usage,
-  config.model,
-  'openrouter'
-)
-
-  if (!out) {
-    throw new Error('OPENROUTER_RISPOSTA_VUOTA')
-  }
-
-  console.log('[AI] Risposta OpenROUTER ricevuta')
-
-  return out
-}
-
-async function callPollinations(messages) {
-
-  console.log('[AI] Chiamo Pollinations...')
-
   const controller = new AbortController()
-
   const timeout = setTimeout(() => {
     controller.abort()
-  }, config.pollinationsTimeout)
+  }, config.openrouterTimeout)
 
   try {
-
-    const res = await fetch(
-      'https://text.pollinations.ai/',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          messages,
-          model: config.fallbackModel,
-          seed: Math.floor(
-            Math.random() * 999999
-          )
-        })
-      }
-    )
-
-    const out = await res.text()
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/Bonzino/axion-bot', // Opzionale per OpenRouter rankings
+        'X-Title': 'Axion Bot'
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        temperature: 1,
+        presence_penalty: 0.6,
+        frequency_penalty: 0.4
+      })
+    })
 
     if (!res.ok) {
-      throw new Error(
-        `POLLINATIONS_${res.status}`
-      )
+      const errText = await res.text()
+      throw new Error(`OPENROUTER_ERRORE_${res.status}: ${errText}`)
     }
 
-    if (!out || !out.trim()) {
-      throw new Error(
-        'POLLINATIONS_RISPOSTA_VUOTA'
-      )
+    const data = await res.json()
+    const out = data.choices?.[0]?.message?.content?.trim()
+
+    if (!out) {
+      throw new Error('OPENROUTER_RISPOSTA_VUOTA')
     }
 
-    console.log(
-      '[AI] Risposta Pollinations ricevuta'
-    )
+    const usage = {
+      prompt_tokens: data.usage?.prompt_tokens || 0,
+      completion_tokens: data.usage?.completion_tokens || 0
+    }
 
-    return out.trim()
+    console.log('[AI USAGE]', usage)
 
+    salvaCostoAI(usage, config.model)
+
+    console.log('[AI] Risposta OpenRouter ricevuta')
+    return out
+
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      throw new Error('OPENROUTER_TIMEOUT')
+    }
+    throw e
   } finally {
     clearTimeout(timeout)
   }
 }
 
-async function call(messages) {
-
-  try {
-
-    return await callOpenrouter(messages)
-
-  } catch (e) {
-
-    console.log(
-      '[AI FALLBACK]',
-      e.message
-    )
-
-    try {
-
-      return await callPollinations(messages)
-
-    } catch (err) {
-
-      console.log(
-        '[AI ERRORE FINALE]',
-        err.message
-      )
-
-      throw new Error('CORE_OFFLINE')
-    }
-  }
-}
-
 function funzioneAttiva(m) {
-
   if (!m.isGroup) return true
-
-  const chat =
-    global.db?.data?.chats?.[m.chat]
-
+  const chat = global.db?.data?.chats?.[m.chat]
   return !!chat?.ai
 }
 
 function getQuotedId(m) {
-
   return (
     m.quoted?.id ||
     m.quoted?.key?.id ||
-    m.message?.extendedTextMessage
-      ?.contextInfo?.stanzaId ||
+    m.message?.extendedTextMessage?.contextInfo?.stanzaId ||
     null
   )
 }
 
 function getMap(chatId) {
-
   if (!sessioniChat.has(chatId)) {
-
-    sessioniChat.set(
-      chatId,
-      new Map()
-    )
+    sessioniChat.set(chatId, new Map())
   }
-
   return sessioniChat.get(chatId)
 }
 
 function creaSessione(chatId, sender) {
-
   const map = getMap(chatId)
-
-  const id =
-    `${chatId}|${sender}|${Date.now()}`
+  const id = `${chatId}|${sender}|${Date.now()}`
 
   map.set(id, {
     id,
@@ -297,18 +195,10 @@ function creaSessione(chatId, sender) {
     updatedAt: Date.now()
   })
 
-  while (
-    map.size >
-    config.maxConversazioni
-  ) {
-
-    const oldest =
-      [...map.entries()]
-      .sort(
-        (a, b) =>
-          a[1].updatedAt -
-          b[1].updatedAt
-      )[0]
+  while (map.size > config.maxConversazioni) {
+    const oldest = [...map.entries()].sort(
+      (a, b) => a[1].updatedAt - b[1].updatedAt
+    )[0]
 
     if (oldest) {
       map.delete(oldest[0])
@@ -318,45 +208,22 @@ function creaSessione(chatId, sender) {
   return map.get(id)
 }
 
-function salvaMessaggio(
-  chatId,
-  key,
-  sessionId
-) {
-
+function salvaMessaggio(chatId, key, sessionId) {
   if (!key?.id) return
-
-  messaggiBot.set(
-    `${chatId}|${key.id}`,
-    sessionId
-  )
+  messaggiBot.set(`${chatId}|${key.id}`, sessionId)
 }
 
 function getSessione(chatId, m) {
-
   const quotedId = getQuotedId(m)
-
   if (!quotedId) return null
 
-  const sessionId =
-    messaggiBot.get(
-      `${chatId}|${quotedId}`
-    )
-
+  const sessionId = messaggiBot.get(`${chatId}|${quotedId}`)
   if (!sessionId) return null
 
-  return (
-    getMap(chatId)
-      .get(sessionId) || null
-  )
+  return getMap(chatId).get(sessionId) || null
 }
 
-function aggiornaHistory(
-  sessione,
-  userText,
-  botText
-) {
-
+function aggiornaHistory(sessione, userText, botText) {
   sessione.history.push({
     role: 'user',
     content: userText
@@ -367,43 +234,22 @@ function aggiornaHistory(
     content: botText
   })
 
-  while (
-    sessione.history.length >
-    config.historyLimit * 2
-  ) {
-
+  while (sessione.history.length > config.historyLimit * 2) {
     sessione.history.shift()
   }
 
   sessione.updatedAt = Date.now()
 }
 
-async function rispostaAI(
-  m,
-  conn,
-  text,
-  sessione,
-  extraSystem = ''
-) {
+async function rispostaAI(m, conn, text, sessione, extraSystem = '') {
+  const name = conn.getName(m.sender) || m.pushName || 'User'
+  const utenteRiconosciuto = riconosciUtente(m.sender)
+  const nomeMittente = utenteRiconosciuto?.nome || name
+  const testoConMittente = `[MITTENTE: ${nomeMittente}]\n${text}`
 
-  const name =
-    conn.getName(m.sender) ||
-    m.pushName ||
-    'User'
-
-  const utenteRiconosciuto =
-    riconosciUtente(m.sender)
-
-  const nomeMittente =
-    utenteRiconosciuto?.nome || name
-
-  const testoConMittente =
-    `[MITTENTE: ${nomeMittente}]\n${text}`
-
-  const extraIdentita =
-    utenteRiconosciuto
-      ? `L'utente che sta parlando è ${utenteRiconosciuto.nome}, ${utenteRiconosciuto.ruolo}. Riconoscilo nella conversazione senza ripeterlo continuamente.`
-      : ''
+  const extraIdentita = utenteRiconosciuto
+    ? `L'utente che sta parlando è ${utenteRiconosciuto.nome}, ${utenteRiconosciuto.ruolo}. Riconoscilo nella conversazione senza ripeterlo continuamente.`
+    : ''
 
   await m.react('🧠')
 
@@ -412,68 +258,31 @@ async function rispostaAI(
       role: 'system',
       content: sys(nomeMittente)
     },
-
-    ...(extraIdentita
-      ? [{
-          role: 'system',
-          content: extraIdentita
-        }]
-      : []),
-
-    ...(extraSystem
-      ? [{
-          role: 'system',
-          content: extraSystem
-        }]
-      : []),
-
+    ...(extraIdentita ? [{ role: 'system', content: extraIdentita }] : []),
+    ...(extraSystem ? [{ role: 'system', content: extraSystem }] : []),
     ...sessione.history,
-
     {
       role: 'user',
       content: testoConMittente
     }
   ]
 
-  const out =
-    await call(msgs)
+  const out = await callOpenRouter(msgs)
 
-  aggiornaHistory(
-    sessione,
-    testoConMittente,
-    out
-  )
+  aggiornaHistory(sessione, testoConMittente, out)
 
-  const sent =
-    await conn.sendMessage(
-      m.chat,
-      {
-        text: out.trim()
-      },
-      { quoted: m }
-    )
-
-  salvaMessaggio(
+  const sent = await conn.sendMessage(
     m.chat,
-    sent.key,
-    sessione.id
+    { text: out.trim() },
+    { quoted: m }
   )
 
+  salvaMessaggio(m.chat, sent.key, sessione.id)
   await m.react('✅')
 }
 
-let handler = async (
-  m,
-  {
-    conn,
-    text,
-    usedPrefix,
-    command
-  }
-) => {
-
+let handler = async (m, { conn, text, usedPrefix, command }) => {
   if (!funzioneAttiva(m)) {
-
     return m.reply(
 `*⚠️ 𝐋𝐚 𝐟𝐮𝐧𝐳𝐢𝐨𝐧𝐞 𝐈𝐀 è 𝐝𝐢𝐬𝐚𝐭𝐭𝐢𝐯𝐚𝐭𝐚.*
 
@@ -484,7 +293,6 @@ let handler = async (
   }
 
   if (!text) {
-
     return m.reply(
 `*╭━━━━━━━🧠━━━━━━━╮*
 *✦ 𝐈𝐀 ✦*
@@ -504,120 +312,47 @@ let handler = async (
   }
 
   try {
-
-    const sessione =
-      creaSessione(
-        m.chat,
-        m.sender
-      )
-
-    await rispostaAI(
-      m,
-      conn,
-      text,
-      sessione
-    )
-
+    const sessione = creaSessione(m.chat, m.sender)
+    await rispostaAI(m, conn, text, sessione)
   } catch (e) {
-
-    console.log(
-      '[AI COMMAND ERROR]',
-      e.message
-    )
-
+    console.log('[AI COMMAND ERROR]', e.message)
     await m.react('❌')
-
-    m.reply(
-`*❌ 𝐄𝐫𝐫𝐨𝐫𝐞 𝐀𝐈*
-
-\`${e.message}\``
-    )
+    m.reply(`*❌ 𝐄𝐫𝐫𝐨𝐫𝐞 𝐀𝐈*\\n\\n\`${e.message}\``)
   }
 }
 
-handler.before = async function (
-  m,
-  { conn }
-) {
-
+handler.before = async function (m, { conn }) {
   if (!m.text) return false
   if (!funzioneAttiva(m)) return false
 
-  const triggerAxion =
-    /\b(axion)\b/i.test(m.text)
+  const triggerAxion = /\b(axion)\b/i.test(m.text)
 
   if (triggerAxion) {
-
-    const sessione =
-      creaSessione(
-        m.chat,
-        m.sender
-      )
-
+    const sessione = creaSessione(m.chat, m.sender)
     try {
-
-      await rispostaAI(
-        m,
-        conn,
-        m.text,
-        sessione
-      )
-
+      await rispostaAI(m, conn, m.text, sessione)
       return true
-
     } catch (e) {
-
-      console.log(
-        '[AI TRIGGER ERROR]',
-        e.message
-      )
-
+      console.log('[AI TRIGGER ERROR]', e.message)
       await m.react('❌')
-
       return true
     }
   }
 
-  const sessione =
-    getSessione(
-      m.chat,
-      m
-    )
-
+  const sessione = getSessione(m.chat, m)
   if (!sessione) return false
 
   try {
+    const extraSystem = sessione.owner !== m.sender
+      ? `Un altro utente si è inserito nella conversazione. Rispondi in modo naturale e continua normalmente la chat.`
+      : ''
 
-    const extraSystem =
-      sessione.owner !== m.sender
-        ? `Un altro utente si è inserito nella conversazione. Rispondi in modo naturale e continua normalmente la chat.`
-        : ''
-
-    await rispostaAI(
-      m,
-      conn,
-      m.text,
-      sessione,
-      extraSystem
-    )
-
+    await rispostaAI(m, conn, m.text, sessione, extraSystem)
     return true
-
   } catch (e) {
-
-    console.log(
-      '[AI BEFORE ERROR]',
-      e.message
-    )
-
+    console.log('[AI BEFORE ERROR]', e.message)
     await m.react('❌')
-
-    m.reply(
-`*❌ 𝐄𝐫𝐫𝐨𝐫𝐞 𝐀𝐈*
-
-\`${e.message}\``
-    )
-
+    m.reply(`*❌ 𝐄𝐫𝐫𝐨𝐫𝐞 𝐀𝐈*\\n\\n\`${e.message}\``)
     return true
   }
 }
@@ -626,51 +361,30 @@ handler.help = ['ia']
 handler.tags = ['main']
 handler.command = /^(ia|ai|gpt)$/i
 
-function salvaCostoAI(
-  usage = {},
-  model = 'gpt-4.1-mini',
-  provider = 'openai'
-) {
+function salvaCostoAI(usage = {}, model = '') {
+  const input = Number(usage.prompt_tokens || 0)
+  const output = Number(usage.completion_tokens || 0)
 
-  const input =
-    Number(usage.prompt_tokens || 0)
+  // Calcolo dei costi indicativo (puoi personalizzarlo in base al modello scelto su OpenRouter)
+  const prezzoInput = 0.15 / 1000000 
+  const prezzoOutput = 0.60 / 1000000
 
-  const output =
-    Number(usage.completion_tokens || 0)
-
-  const prezzoInput =
-    0.40 / 1000000
-
-  const prezzoOutput =
-    1.60 / 1000000
-
-  const cost =
-    (input * prezzoInput) +
-    (output * prezzoOutput)
+  const cost = (input * prezzoInput) + (output * prezzoOutput)
 
   if (!global.db.data.aiCost) {
-
     global.db.data.aiCost = {
       totalInput: 0,
       totalOutput: 0,
       totalCost: 0,
       requests: 0,
-      openai: 0,
-      fallback: 0,
       today: {}
     }
   }
 
-  const stats =
-    global.db.data.aiCost
-
-  const oggi =
-    new Date()
-      .toISOString()
-      .slice(0, 10)
+  const stats = global.db.data.aiCost
+  const oggi = new Date().toISOString().slice(0, 10)
 
   if (!stats.today[oggi]) {
-
     stats.today[oggi] = {
       input: 0,
       output: 0,
@@ -683,9 +397,6 @@ function salvaCostoAI(
   stats.totalOutput += output
   stats.totalCost += cost
   stats.requests += 1
-
-  stats[provider] =
-    (stats[provider] || 0) + 1
 
   stats.today[oggi].input += input
   stats.today[oggi].output += output
