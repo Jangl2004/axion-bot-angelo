@@ -9,7 +9,6 @@ const CARTELLA_CACHE = './media/seriea_cache'
 const SFONDO_PATH = path.join(CARTELLA_CACHE, 'sfondo_serie_a.png')
 const SNAI_PATH = './media/snai.png'
 
-// Cambia questo se vuoi un altro sfondo
 const SFONDO_URL = 'https://i.imgur.com/3GbgP6K.png'
 
 const EVENTI = [
