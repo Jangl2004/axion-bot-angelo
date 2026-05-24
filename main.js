@@ -423,21 +423,44 @@ if (!global.__pluginDebugCleanupInterval) {
 }
 
 if (!fs.existsSync(`./${authFile}/creds.json`)) {
-    if (opzione === '2' || methodCode) {
+        if (opzione === '2' || methodCode) {
         opzione = '2';
-        if (!conn.authState.creds.registered) {
+        if (!conn.authState.creds.registered && !pairingCodeRequested) {
+            pairingCodeRequested = true;
             let addNumber;
+            
             if (phoneNumber) {
-                addNumber = phoneNumber.replace(/[^0-9]/g, '');
+                addNumber = normalizePhoneNumberInput(phoneNumber);
+                if (!addNumber) {
+                    console.log(chalk.bold.redBright('Il numero configurato non è valido.'));
+                    pairingCodeRequested = false;
+                    return;
+                }
+                phoneNumber = `+${addNumber}`;
             } else {
-                phoneNumber = await question(chalk.bgBlack(chalk.bold.hex('#00CED1')(`Inserisci il numero di WhatsApp.\n${chalk.bold.hex('#2ECC71')("Esempio: +393471234567")}\n${chalk.bold.hex('#00BFFF')('━━► ')}`)));
-                addNumber = phoneNumber.replace(/\D/g, '');
-                if (!phoneNumber.startsWith('+')) phoneNumber = `+${phoneNumber}`;
+                while (true) {
+                    const input = await question(chalk.bgBlack(chalk.bold.bgMagentaBright(`Inserisci il numero di WhatsApp.\n${chalk.bold.yellowBright("Esempio: +393471234567")}\n━━► `)));
+                    addNumber = normalizePhoneNumberInput(input);
+                    if (addNumber) {
+                        phoneNumber = `+${addNumber}`;
+                        break;
+                    }
+                    console.log(chalk.bold.yellowBright('Numero non valido. Inserisci il prefisso internazionale completo.'));
+                }
             }
+
             setTimeout(async () => {
-                let codeBot = await conn.requestPairingCode(addNumber, 'AXIONBOT');
-                codeBot = codeBot?.match(/.{1,4}/g)?.join("-") || codeBot;
-                console.log(chalk.bold.white(chalk.bgHex('#00CED1')('📞 CODICE DI ABBINAMENTO:')), chalk.bold.white(chalk.hex('#2ECC71')(codeBot)));
+                try {
+                    const randomCode = generateRandomCode();
+                    let codeBot = await conn.requestPairingCode(addNumber, randomCode);
+                    const formattedCode = formatPairingCode(codeBot);
+                    
+                    console.log(chalk.bold.white(chalk.bgBlueBright('CODICE DI COLLEGAMENTO:')), chalk.bold.white(formattedCode));
+                    console.log(chalk.bold.greenBright('Inserisci il codice su WhatsApp > Dispositivi collegati > Collega un dispositivo.'));
+                } catch (error) {
+                    pairingCodeRequested = false;
+                    console.log(chalk.bold.redBright(`Impossibile generare il pairing code: ${error.message}`));
+                }
             }, 3000);
         }
     }
@@ -495,7 +518,7 @@ async function notifyRestartComplete(conn) {
 
 *✅ 𝐈𝐥 𝐫𝐢𝐚𝐯𝐯𝐢𝐨 è 𝐬𝐭𝐚𝐭𝐨 𝐜𝐨𝐦𝐩𝐥𝐞𝐭𝐚𝐭𝐨 𝐜𝐨𝐧 𝐬𝐮𝐜𝐜𝐞𝐬𝐬𝐨.*
 *🚀 𝐓𝐮𝐭𝐭𝐢 𝐢 𝐬𝐢𝐬𝐭𝐞𝐦𝐢 𝐬𝐨𝐧𝐨 𝐨𝐫𝐚 𝐨𝐧𝐥𝐢𝐧𝐞.*
-*⏱️ 𝐓𝐞𝐦𝐩𝐨 𝐝𝐢 𝐫𝐢𝐚𝐯𝐯𝐢𝐨:* ${elapsed}𝐬
+*⏱️ 𝐓𝐞𝐦𝐩о 𝐝𝐢 𝐫𝐢𝐚𝐯𝐯𝐢𝐨:* ${elapsed}𝐬
 *🧾 𝐄𝐫𝐫𝐨𝐫𝐢 𝐫𝐢𝐥𝐞𝐯𝐚𝐭𝐢:* ${errors}
 
 > *𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓*`
