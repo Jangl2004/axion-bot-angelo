@@ -434,9 +434,9 @@ if (!fs.existsSync(`./${authFile}/creds.json`)) {
                 if (!addNumber) {
                     console.log(chalk.bold.redBright('Il numero configurato non è valido.'));
                     pairingCodeRequested = false;
-                    return;
-                }
-                phoneNumber = `+${addNumber}`;
+// return;
+}
+phoneNumber = `+${addNumber}`;
             } else {
                 while (true) {
                     const input = await question(chalk.bgBlack(chalk.bold.bgMagentaBright(`Inserisci il numero di WhatsApp.\n${chalk.bold.yellowBright("Esempio: +393471234567")}\n━━► `)));
