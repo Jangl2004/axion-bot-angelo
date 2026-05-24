@@ -425,7 +425,7 @@ if (!global.__pluginDebugCleanupInterval) {
 if (!fs.existsSync(`./${authFile}/creds.json`)) {
         if (opzione === '2' || methodCode) {
         opzione = '2';
-        if (!conn.authState.creds.registered && !pairingCodeRequested) {
+        if (!conn.authState.creds.registered) {
             pairingCodeRequested = true;
             let addNumber;
             
