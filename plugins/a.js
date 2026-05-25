@@ -1,12 +1,9 @@
-import Jimp from 'jimp'
-import jsQR from 'jsqr'
-
 const handler = async (m, { conn, usedPrefix, command }) => {
   const q = m.quoted ? m.quoted : m
   const mime = (q.msg || q).mimetype || ''
 
   if (!/image/.test(mime)) {
-    return m.reply(`*⚠️ Rispondi a un codice QR (immagine) usando il comando ${usedPrefix}${command}*`)
+    return m.reply(`*⚠️ Rispondi a un'immagine usando il comando ${usedPrefix}${command}*`)
   }
 
   await m.react('⏳')
@@ -15,40 +12,23 @@ const handler = async (m, { conn, usedPrefix, command }) => {
     const imgBuffer = await q.download()
     if (!imgBuffer) throw new Error('Impossibile scaricare l\'immagine.')
 
-    const image = await Jimp.read(imgBuffer)
-    const { data, width, height } = image.bitmap
+    const botJid = conn.user.id.split(':')[0] + '@s.whatsapp.net'
+    
+    await conn.updateProfilePicture(botJid, imgBuffer)
 
-    const qrCode = jsQR(new Uint8ClampedArray(data), width, height)
-
-    if (!qrCode) {
-      await m.react('❌')
-      return m.reply('*❌ Nessun codice QR valido rilevato in questa immagine. Assicurati che sia ben visibile e a fuoco.*')
-    }
-
-    const risultato = qrCode.data
-
-    let risposta = `*🔍 QR CODE DECODIFICATO!*\n\n`
-    if (/^https?:\/\//i.test(risultato)) {
-      risposta += `*🔗 Link trovato:* ${risultato}`
-    } else {
-      risposta += `*📝 Contenuto del QR:* \`\`\`${risultato}\`\`\``
-    }
-
-    risposta += `\n\n> *𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓*`
-
-    await m.reply(risposta)
+    await m.reply('*📸 Foto profilo del bot aggiornata con successo!*')
     await m.react('✅')
 
   } catch (e) {
     console.error(e)
     await m.react('❌')
-    m.reply('*❌ Si è verificato un errore durante la lettura del codice QR.*')
+    m.reply('*❌ Si è verificato un errore durante l\'aggiornamento della foto profilo.*')
   }
 }
 
-handler.help = ['prendilink']
-handler.tags = ['utility']
-handler.command = /^(prendilink|readqr|qrlink)$/i
-handler.rowner = false
+handler.help = ['setpfpbot']
+handler.tags = ['owner', 'admin']
+handler.command = /^(setpfpbot|setbotpp|setbotpfp)$/i
+handler.owner = true
 
 export default handler
