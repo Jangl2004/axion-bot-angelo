@@ -423,3 +423,221 @@ if (!global.__pluginDebugCleanupInterval) {
 }
 
 if (!fs.existsSync(`./${authFile}/creds.json`)) {
+    if (opzione === '2' || methodCode) {
+        opzione = '2';
+        if (!conn.authState.creds.registered) {
+            let addNumber;
+            if (phoneNumber) {
+                addNumber = phoneNumber.replace(/[^0-9]/g, '');
+            } else {
+                phoneNumber = await question(chalk.bgBlack(chalk.bold.hex('#00CED1')(`Inserisci il numero di WhatsApp.\n${chalk.bold.hex('#2ECC71')("Esempio: +393471234567")}\n${chalk.bold.hex('#00BFFF')('━━► ')}`)));
+                addNumber = phoneNumber.replace(/\D/g, '');
+                if (!phoneNumber.startsWith('+')) phoneNumber = `+${phoneNumber}`;
+            }
+            setTimeout(async () => {
+                let codeBot = await conn.requestPairingCode(addNumber, 'AXIONBOT');
+                codeBot = codeBot?.match(/.{1,4}/g)?.join("-") || codeBot;
+                console.log(chalk.bold.white(chalk.bgHex('#00CED1')('📞 CODICE DI ABBINAMENTO:')), chalk.bold.white(chalk.hex('#2ECC71')(codeBot)));
+            }, 3000);
+        }
+    }
+}
+conn.isInit = false;
+if (!opts['test']) {
+    if (global.db) setInterval(async () => {
+        if (global.db.data) await global.db.write();
+        if (opts['autocleartmp']) {
+            const tmp = ['temp'];
+            tmp.forEach(dirName => {
+                if (!existsSync(dirName)) return;
+                try {
+                    readdirSync(dirName).forEach(file => {
+                        const filePath = join(dirName, file);
+                        try {
+                            const stats = statSync(filePath);
+                            if (stats.isFile() && (Date.now() - stats.mtimeMs) > 2 * 60 * 1000) {
+                                unlinkSync(filePath);
+                            }
+                        } catch {}
+                    });
+                } catch {}
+            });
+        }
+    }, 30 * 1000);
+}
+if (opts['server']) (await import('./server.js')).default(global.conn, PORT);
+
+async function notifyRestartComplete(conn) {
+  try {
+    if (!existsSync(RESTART_FILE)) return
+
+    const restartState = JSON.parse(fs.readFileSync(RESTART_FILE, 'utf-8'))
+
+    if (
+      restartState.type !== 'manual_restart' ||
+      !restartState.startedAt ||
+      !restartState.chat ||
+      !restartState.sender
+    ) {
+      try {
+        unlinkSync(RESTART_FILE)
+      } catch {}
+      return
+    }
+
+    const elapsed = ((Date.now() - restartState.startedAt) / 1000).toFixed(1)
+    const errors = restartState.errors || 0
+
+    const finalText =
+`╭━━━━━━━⚡━━━━━━━╮
+*✦ 𝐁𝐎𝐓 𝐑𝐈𝐀𝐕𝐕𝐈𝐀𝐓𝐎 ✦*
+╰━━━━━━━⚡━━━━━━━╯
+
+*✅ 𝐈𝐥 𝐫𝐢𝐚𝐯𝐯𝐢𝐨 è 𝐬𝐭𝐚𝐭𝐨 𝐜𝐨𝐦𝐩𝐥𝐞𝐭𝐚𝐭𝐨 𝐜𝐨𝐧 𝐬𝐮𝐜𝐜𝐞𝐬𝐬𝐨.*
+*🚀 𝐓𝐮𝐭𝐭𝐢 𝐢 𝐬𝐢𝐬𝐭𝐞𝐦𝐢 𝐬𝐨𝐧𝐨 𝐨𝐫𝐚 𝐨𝐧𝐥𝐢𝐧𝐞.*
+*⏱️ 𝐓𝐞𝐦𝐩𝐨 𝐝𝐢 𝐫𝐢𝐚𝐯𝐯𝐢𝐨:* ${elapsed}𝐬
+*🧾 𝐄𝐫𝐫𝐨𝐫𝐢 𝐫𝐢𝐥𝐞𝐯𝐚𝐭𝐢:* ${errors}
+
+> *𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓*`
+
+    if (restartState.messageKey) {
+      await conn.relayMessage(
+        restartState.chat,
+        {
+          protocolMessage: {
+            key: restartState.messageKey,
+            type: 14,
+            editedMessage: {
+              extendedTextMessage: {
+                text: finalText,
+                contextInfo: {
+                  mentionedJid: [restartState.sender]
+                }
+              }
+            }
+          }
+        },
+        {}
+      )
+    } else {
+      await conn.sendMessage(restartState.chat, {
+        text: finalText,
+        mentions: [restartState.sender]
+      })
+    }
+
+    try {
+      unlinkSync(RESTART_FILE)
+    } catch {}
+
+  } catch (e) {
+    console.error('[RESTART COMPLETE ERROR]', e)
+
+    try {
+      if (existsSync(RESTART_FILE)) unlinkSync(RESTART_FILE)
+    } catch {}
+  }
+}
+async function connectionUpdate(update) {
+    const { connection, lastDisconnect, isNewLogin, qr } = update;
+    global.stopped = connection;
+    if (isNewLogin) conn.isInit = true;
+    const code = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
+    if (code && code !== DisconnectReason.loggedOut) {
+        await global.reloadHandler(true).catch(console.error);
+        global.timestamp.connect = new Date;
+    }
+    if (global.db.data == null) await loadDatabase();
+    if (qr && (opzione === '1' || methodCodeQR) && !global.qrGenerated) {
+        console.log(chalk.bold.yellow(`\n 🪐 SCANSIONA IL CODICE QR - SCADE TRA 45 SECONDI 🪐`));
+        global.qrGenerated = true;
+    }
+    if (connection === 'open') {
+    global.qrGenerated = false;
+    global.connectionMessagesPrinted = {};
+    await notifyRestartComplete(conn);
+    if (!global.isLogoPrinted) {
+            const finchevedotuttoviolaviola = [
+    '#00BFFF', '#00CED1', '#20B2AA', '#2ECC71', '#2ECC71', '#20B2AA', '#00CED1', '#00BFFF',
+    '#00BFFF', '#00CED1', '#20B2AA', '#2ECC71', '#2ECC71', '#20B2AA'
+];
+
+const axionbot = [
+    ` █████╗ ██╗  ██╗██╗ ██████╗ ███╗   ██╗    ██████╗  ██████╗ ████████╗`,
+    `██╔══██╗╚██╗██╔╝██║██╔═══██╗████╗  ██║    ██╔══██╗██╔═══██╗╚══██╔══╝`,
+    `███████║ ╚███╔╝ ██║██║   ██║██╔██╗ ██║    ██████╔╝██║   ██║   ██║   `,
+    `██╔══██║ ██╔██╗ ██║██║   ██║██║╚██╗██║    ██╔══██╗██║   ██║   ██║   `,
+    `██║  ██║██╔╝ ██╗██║╚██████╔╝██║ ╚████║    ██████╔╝╚██████╔╝   ██║   `,
+    `╚═╝  ╚═╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝    ╚═════╝  ╚═════╝    ╚═╝   `
+];
+
+axionbot.forEach((line, i) => {
+    const color = finchevedotuttoviolaviola[i] || finchevedotuttoviolaviola[finchevedotuttoviolaviola.length - 1];
+    // Grassetto e colore applicati direttamente a ogni riga
+    console.log(chalk.hex(color).bold(line));
+});
+
+global.isLogoPrinted = true;
+
+        }
+    }
+    if (connection === 'close') {
+        const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
+        if (reason === DisconnectReason.badSession) {
+            if (!global.connectionMessagesPrinted.badSession) {
+                            console.log(chalk.bold.hex('#E74C3C')(`\n⚠️❗ SESSIONE NON VALIDA, ELIMINA LA CARTELLA ${global.authFile} E SCANSIONA IL CODICE QR ⚠️`));
+                global.connectionMessagesPrinted.badSession = true;
+            }
+            await global.reloadHandler(true).catch(console.error);
+        } else if (reason === DisconnectReason.connectionLost) {
+            if (!global.connectionMessagesPrinted.connectionLost) {
+                console.log(chalk.hex('#00CED1').bold(`\nCONNESSIONE PERSA COL SERVER\nRICONNESSIONE IN CORSO... \n𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓`));
+                global.connectionMessagesPrinted.connectionLost = true;
+            }
+            await global.reloadHandler(true).catch(console.error);
+        } else if (reason === DisconnectReason.connectionReplaced) {
+            if (!global.connectionMessagesPrinted.connectionReplaced) {
+                console.log(chalk.hex('#00CED1').bold(`CONNESSIONE SOSTITUITA\nÈ stata aperta un'altra sessione, \nchiudi prima quella attuale.\n𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓`));
+                global.connectionMessagesPrinted.connectionReplaced = true;
+            }
+        } else if (reason === DisconnectReason.loggedOut) {
+            console.log(chalk.bold.hex('#E74C3C')(`\n⚠️ DISCONNESSO, CARTELLA ${global.authFile} ELIMINATA. RIAVVIA IL BOT E SCANSIONA IL CODICE QR ⚠️`));
+            try {
+                if (fs.existsSync(global.authFile)) {
+                    fs.rmSync(global.authFile, { recursive: true, force: true });
+                }
+            } catch (e) {
+                console.error('Errore nell\'eliminazione della cartella sessione:', e);
+            }
+            process.exit(1);
+        } else if (reason === DisconnectReason.restartRequired) {
+            if (!global.connectionMessagesPrinted.restartRequired) {
+                console.log(chalk.hex('#00BFFF').bold(`\nCONNESSIONE AL SERVER`));
+                global.connectionMessagesPrinted.restartRequired = true;
+            }
+            await global.reloadHandler(true).catch(console.error);
+        } else if (reason === DisconnectReason.timedOut) {
+            if (!global.connectionMessagesPrinted.timedOut) {
+                console.log(chalk.hex('#00CED1').bold(`\nTIMEOUT CONNESSIONE\nRICONNESSIONE IN CORSO...\n𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓`));
+                global.connectionMessagesPrinted.timedOut = true;
+            }
+            await global.reloadHandler(true).catch(console.error);
+        } else if (reason !== DisconnectReason.connectionClosed) {
+            if (!global.connectionMessagesPrinted.unknown) {
+                console.log(chalk.bold.hex('#E74C3C')(`\n⚠️❗ MOTIVO DISCONNESSIONE SCONOSCIUTO: ${reason || 'Non trovato'} >> ${connection || 'Non trovato'}`));
+                global.connectionMessagesPrinted.unknown = true;
+            }
+            await global.reloadHandler(true).catch(console.error);
+        }
+    }
+  }
+process.on('uncaughtException', async (err) => {
+    console.error(err);
+    await global.sendPluginErrorToChat?.('Uncaught Exception', err);
+});
+
+process.on('unhandledRejection', async (err) => {
+    console.error(err);
+    await global.sendPluginErrorToChat?.('Unhandled Rejection', err);
+});
+(async () => {
