@@ -866,16 +866,21 @@ try {
         if (m && user) {
             user.exp += m.exp || 0
             user.euro -= m.euro * 1 || 0
-            if (!user.messages) user.messages = 0;
-            user.messages++;
-            if (m.isGroup) {
-                if (!chat.users) chat.users = {};
-                const senderId = normalizedSender;
-                if (!chat.users[senderId]) {
-                    chat.users[senderId] = { messages: 0 };
-                }
-                chat.users[senderId].messages++;
-            }
+const today=new Date().toLocaleDateString('it-IT',{timeZone:'Europe/Rome'})
+if(user.todayMessagesDate!==today){
+user.todayMessagesDate=today
+user.todayMessages=0
+}
+if(!user.messages)user.messages=0
+if(!user.todayMessages)user.todayMessages=0
+user.messages++
+user.todayMessages++
+if(m.isGroup){
+if(!chat.users)chat.users={}
+const senderId=normalizedSender
+if(!chat.users[senderId])chat.users[senderId]={messages:0}
+chat.users[senderId].messages++
+}
 
             if (m.plugin) {
                 let stats = global.db.data.stats || (global.db.data.stats = {})
