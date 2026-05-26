@@ -1,5 +1,7 @@
-
 import { exec } from 'child_process';
+import util from 'util';
+
+const execPromise = util.promisify(exec);
 
 const handler = async (m, { args, usedPrefix, command }) => {
   if (!args[0]) {
@@ -10,36 +12,34 @@ const handler = async (m, { args, usedPrefix, command }) => {
   await m.react('⏳');
 
   try {
-    const command = `python3 path/to/sherlock/sherlock.py ${searchQuery}`;
+    const sysCommand = `python3 path/to/sherlock/sherlock.py ${searchQuery}`;
     
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.error(error);
-        return m.reply(`*❌ Errore durante la ricerca di "${searchQuery}":* ${error.message}`);
-      }
-      if (stderr) {
-        console.error(stderr);
-        return m.reply(`*❌ Errore durante la ricerca di "${searchQuery}":* ${stderr}`);
-      }
+    const { stdout, stderr } = await execPromise(sysCommand);
 
-      const results = stdout.split('\n').filter(line => line.trim() !== '');
-      
-      if (results.length === 0) {
-        return m.reply(`*📉 Nessun risultato trovato per "${searchQuery}".*`);
-      }
+    if (stderr) {
+      console.error(stderr);
+      await m.react('❌');
+      return m.reply(`*❌ Errore durante la ricerca di "${searchQuery}":* ${stderr}`);
+    }
 
-      let replyMsg = `*📈 RISULTATI PER "${searchQuery}":*\n\n`;
-      
-      results.forEach(result => {
-        replyMsg += `• ${result}\n`;
-      });
+    const results = stdout.split('\n').filter(line => line.trim() !== '');
 
-      replyMsg += `\n🔍 *Analisi Completa:* Questa ricerca ha controverificato vari servizi online.\n`;
-      replyMsg += `Se hai bisogno di ulteriore assistenza o se desideri controllare altri nomi utente, non esitare a chiedere!`;
+    if (results.length === 0) {
+      await m.react('❌');
+      return m.reply(`*📉 Nessun risultato trovato per "${searchQuery}".*`);
+    }
 
-      await m.reply(replyMsg.trim());
-      await m.react('✅');
+    let replyMsg = `*📈 RISULTATI PER "${searchQuery}":*\n\n`;
+
+    results.forEach(result => {
+      replyMsg += `• ${result}\n`;
     });
+
+    replyMsg += `\n🔍 *Analisi Completa:* Questa ricerca ha controverificato vari servizi online.\n`;
+    replyMsg += `Se hai bisogno di ulteriore assistenza o se desideri controllare altri nomi utente, non esitare a chiedere!`;
+
+    await m.reply(replyMsg.trim());
+    await m.react('✅');
 
   } catch (error) {
     console.error(error);
