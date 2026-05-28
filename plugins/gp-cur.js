@@ -2,70 +2,56 @@ import fetch from 'node-fetch'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import SpotifyWebApi from 'spotify-web-api-node'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const USERS_FILE = path.join(__dirname, '..', 'lastfm_users.json')
 const LIKES_FILE = path.join(__dirname, '..', 'song_likes.json')
-const SPOTIFY_FILE = path.join(__dirname, '..', 'spotify_tokens.json')
 
-if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, '{}')
-if (!fs.existsSync(LIKES_FILE)) fs.writeFileSync(LIKES_FILE, '{}')
-if (!fs.existsSync(SPOTIFY_FILE)) fs.writeFileSync(SPOTIFY_FILE, '{}')
-
-const LASTFM_API_KEY = 'YOUR_LASTFM_API_KEY'
-
-const spotifyApi = new SpotifyWebApi({
-  clientId: 'SPOTIFY_CLIENT_ID',
-  clientSecret: 'SPOTIFY_CLIENT_SECRET',
-  redirectUri: 'http://localhost:3000/callback'
-})
+if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, '{}', 'utf8')
+if (!fs.existsSync(LIKES_FILE)) fs.writeFileSync(LIKES_FILE, '{}', 'utf8')
 
 const cache = new Map()
 
-function loadJSON(file) {
-  return JSON.parse(fs.readFileSync(file, 'utf8'))
+const CACHE_DURATION = 300000
+const RECENT_TRACK_CACHE_DURATION = 30000
+
+const LASTFM_API_KEY = '36f859a1fc4121e7f0e931806507d5f9'
+
+function loadUsers() {
+  return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'))
 }
 
-function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2))
-}
-
-function getLastfmUsername(userId) {
-  return loadJSON(USERS_FILE)[userId] || null
-}
-
-function setLastfmUsername(userId, username) {
-  const users = loadJSON(USERS_FILE)
-  users[userId] = username
-  saveJSON(USERS_FILE, users)
-}
-
-function getSpotifyToken(userId) {
-  return loadJSON(SPOTIFY_FILE)[userId] || null
-}
-
-function saveSpotifyToken(userId, tokenData) {
-  const data = loadJSON(SPOTIFY_FILE)
-  data[userId] = tokenData
-  saveJSON(SPOTIFY_FILE, data)
+function saveUsers(users) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8')
 }
 
 function loadLikes() {
-  return loadJSON(LIKES_FILE)
+  return JSON.parse(fs.readFileSync(LIKES_FILE, 'utf8'))
 }
 
-function saveLikes(data) {
-  saveJSON(LIKES_FILE, data)
+function saveLikes(likes) {
+  fs.writeFileSync(LIKES_FILE, JSON.stringify(likes, null, 2), 'utf8')
 }
 
-function generateSongId(username, artist, track) {
-  return `${username}_${artist}_${track}`
-    .replace(/[^\w\s]/gi, '')
-    .replace(/\s+/g, '_')
-    .toLowerCase()
+function getLastfmUsername(userId) {
+  return loadUsers()[userId] || null
+}
+
+function setLastfmUsername(userId, username) {
+  const users = loadUsers()
+  users[userId] = username
+  saveUsers(users)
+}
+
+function getSongLikes(songId) {
+  const likes = loadLikes()
+  const songData = likes[songId]
+
+  if (!songData) return 0
+
+  return songData.likes || 0
 }
 
 function addSongLike(songId, userId) {
@@ -78,51 +64,109 @@ function addSongLike(songId, userId) {
     }
   }
 
-  if (likes[songId].likedBy.includes(userId)) {
+  const songData = likes[songId]
+
+  if (!songData.likedBy) songData.likedBy = []
+
+  if (songData.likedBy.includes(userId)) {
     return {
+      success: false,
       alreadyLiked: true,
-      total: likes[songId].likes
+      total: songData.likes
     }
   }
 
-  likes[songId].likes++
-  likes[songId].likedBy.push(userId)
+  songData.likes++
+  songData.likedBy.push(userId)
 
   saveLikes(likes)
 
   return {
+    success: true,
     alreadyLiked: false,
-    total: likes[songId].likes
+    total: songData.likes
   }
 }
 
-function getUserLikesReceived(username) {
+function getUserLikesReceived(userId) {
+  const users = loadUsers()
+  const userLastfm = users[userId]
+
+  if (!userLastfm) return 0
+
   const likes = loadLikes()
 
-  let total = 0
+  let totalLikesReceived = 0
 
   for (const songId in likes) {
-    if (songId.startsWith(username.toLowerCase())) {
-      total += likes[songId].likes || 0
+    const parts = songId.split('_')
+
+    if (
+      parts.length > 0 &&
+      parts[0].toLowerCase() === userLastfm.toLowerCase()
+    ) {
+      totalLikesReceived += likes[songId].likes || 0
     }
   }
 
-  return total
+  return totalLikesReceived
 }
 
-async function fetchWithCache(url, duration = 30000) {
+function getUsernameFromId(userId) {
+  const users = loadUsers()
+  return users[userId] || null
+}
+
+function getIdFromUsername(username) {
+  const users = loadUsers()
+
+  for (const [id, user] of Object.entries(users)) {
+    if (user.toLowerCase() === username.toLowerCase()) {
+      return id
+    }
+  }
+
+  return null
+}
+
+function generateSongId(username, artist, track) {
+  return `${username}_${artist}_${track}`
+    .replace(/[^\w\s]/gi, '')
+    .replace(/\s+/g, '_')
+    .toLowerCase()
+}
+
+function invalidateRecentCache(username) {
+  const recentUrl =
+    `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${LASTFM_API_KEY}&format=json&limit=1`
+
+  cache.delete(recentUrl)
+
+  const historyUrl =
+    `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${LASTFM_API_KEY}&format=json&limit=10`
+
+  cache.delete(historyUrl)
+}
+
+async function fetchWithCache(
+  url,
+  cacheDuration = CACHE_DURATION
+) {
   const now = Date.now()
 
-  if (cache.has(url)) {
-    const cached = cache.get(url)
+  const cached = cache.get(url)
 
-    if (now - cached.timestamp < duration) {
-      return cached.data
-    }
+  if (cached && now - cached.timestamp < cacheDuration) {
+    return cached.data
   }
 
   try {
     const res = await fetch(url)
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`)
+    }
+
     const json = await res.json()
 
     cache.set(url, {
@@ -131,16 +175,39 @@ async function fetchWithCache(url, duration = 30000) {
     })
 
     return json
-  } catch {
+
+  } catch (error) {
+    console.error('Fetch error:', error)
     return null
   }
+}
+
+async function getUserInfo(username) {
+  const url =
+    `https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${username}&api_key=${LASTFM_API_KEY}&format=json`
+
+  const data = await fetchWithCache(url)
+
+  return data?.user
+}
+
+async function getTrackInfo(username, artist, track) {
+  const url =
+    `https://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key=${LASTFM_API_KEY}&artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(track)}&username=${username}&format=json`
+
+  const data = await fetchWithCache(url)
+
+  return data?.track
 }
 
 async function getRecentTrack(username) {
   const url =
     `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${LASTFM_API_KEY}&format=json&limit=1`
 
-  const data = await fetchWithCache(url)
+  const data = await fetchWithCache(
+    url,
+    RECENT_TRACK_CACHE_DURATION
+  )
 
   return data?.recenttracks?.track?.[0]
 }
@@ -149,88 +216,95 @@ async function getRecentTracks(username, limit = 10) {
   const url =
     `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${LASTFM_API_KEY}&format=json&limit=${limit}`
 
-  const data = await fetchWithCache(url)
+  const data = await fetchWithCache(
+    url,
+    RECENT_TRACK_CACHE_DURATION
+  )
 
   return data?.recenttracks?.track || []
 }
 
-async function refreshSpotifyToken(userId) {
-  const tokenData = getSpotifyToken(userId)
-
-  if (!tokenData) return null
-
-  spotifyApi.setRefreshToken(tokenData.refresh_token)
-
-  try {
-    const refreshed = await spotifyApi.refreshAccessToken()
-
-    const access_token = refreshed.body.access_token
-
-    saveSpotifyToken(userId, {
-      ...tokenData,
-      access_token
-    })
-
-    return access_token
-  } catch {
-    return null
+const handler = async (
+  m,
+  {
+    conn,
+    usedPrefix,
+    text,
+    command
   }
-}
-
-async function skipTrack(userId) {
-  const accessToken = await refreshSpotifyToken(userId)
-
-  if (!accessToken) return false
-
-  spotifyApi.setAccessToken(accessToken)
-
-  try {
-    await spotifyApi.skipToNext()
-    return true
-  } catch {
-    return false
-  }
-}
-
-function invalidateCache(username) {
-  const keys = [...cache.keys()]
-
-  for (const key of keys) {
-    if (key.includes(username)) {
-      cache.delete(key)
-    }
-  }
-}
-
-const handler = async (m, { conn, command, text, usedPrefix }) => {
+) => {
 
   if (command === 'setuser') {
-    if (!text) {
+
+    const username = text.trim()
+
+    if (!username) {
       return conn.sendMessage(m.chat, {
         text: `❌ Usa: ${usedPrefix}setuser <username>`
       })
     }
 
-    setLastfmUsername(m.sender, text.trim())
+    setLastfmUsername(m.sender, username)
 
     return conn.sendMessage(m.chat, {
-      text: `✅ Username Last.fm salvato!`
+      text: `✅ Username *${username}* salvato!`
     })
   }
 
-  const user = getLastfmUsername(m.sender)
+  if (command === 'like') {
 
-  if (!user) {
-    return conn.sendMessage(m.chat, {
-      text: `❌ Usa prima ${usedPrefix}setuser <username>`
-    })
-  }
+    const targetUser =
+      m.mentionedJid?.[0] || text.trim()
 
-  if (command === 'cur') {
+    if (!targetUser && !text) {
+      return conn.sendMessage(m.chat, {
+        text:
+`❌ Specifica l'utente!
 
-    invalidateCache(user)
+Esempio:
+• ${usedPrefix}like @utente
+• ${usedPrefix}like username`
+      })
+    }
 
-    const track = await getRecentTrack(user)
+    let targetUsername
+    let targetUserId
+
+    if (targetUser.includes('@')) {
+
+      targetUserId = targetUser
+
+      targetUsername =
+        getUsernameFromId(targetUserId)
+
+      if (!targetUsername) {
+        return conn.sendMessage(m.chat, {
+          text:
+`❌ L'utente menzionato non ha registrato un username Last.fm!
+
+Digli di usare ${usedPrefix}setuser`
+        })
+      }
+
+    } else {
+
+      targetUsername = targetUser
+
+      targetUserId =
+        getIdFromUsername(targetUsername)
+
+      if (!targetUserId) {
+        return conn.sendMessage(m.chat, {
+          text:
+`❌ Nessun utente trovato con username *${targetUsername}*`
+        })
+      }
+    }
+
+    invalidateRecentCache(targetUsername)
+
+    const track =
+      await getRecentTrack(targetUsername)
 
     if (!track) {
       return conn.sendMessage(m.chat, {
@@ -238,28 +312,133 @@ const handler = async (m, { conn, command, text, usedPrefix }) => {
       })
     }
 
-    const artist = track.artist?.['#text'] || 'Sconosciuto'
-    const title = track.name || 'Sconosciuto'
-    const album = track.album?.['#text'] || 'Sconosciuto'
+    const artist =
+      track.artist?.['#text'] || 'unknown'
+
+    const songName =
+      track.name || 'unknown'
+
+    const songId =
+      generateSongId(
+        targetUsername,
+        artist,
+        songName
+      )
+
+    const result =
+      addSongLike(songId, m.sender)
+
+    if (result.alreadyLiked) {
+      return conn.sendMessage(m.chat, {
+        text:
+`❌ Hai già messo like a "${songName}" di ${targetUsername}!`
+      })
+    }
+
+    const targetName =
+      getUsernameFromId(targetUserId) ||
+      targetUsername
+
+    return conn.sendMessage(m.chat, {
+      text:
+`🔥 Hai messo fuoco a *${songName}* di ${targetName}!`
+    })
+  }
+
+  if (command === 'mylikes') {
+
+    const user =
+      getLastfmUsername(m.sender)
+
+    if (!user) {
+      return conn.sendMessage(m.chat, {
+        text:
+`❌ Registrati con ${usedPrefix}setuser <username>`
+      })
+    }
+
+    const likesReceived =
+      getUserLikesReceived(m.sender)
+
+    return conn.sendMessage(m.chat, {
+      text:
+`📊 *Statistiche Like* di *${user}*
+
+❤️ Likes ricevuti totali: ${likesReceived}
+
+Usa ${usedPrefix}like @utente per mettere like alla canzone di qualcuno!`
+    })
+  }
+
+  const user =
+    getLastfmUsername(m.sender)
+
+  if (!user) {
+    return conn.sendMessage(m.chat, {
+      text:
+`❌ Registrati con ${usedPrefix}setuser <username>`
+    })
+  }
+
+  if (command === 'cur') {
+
+    invalidateRecentCache(user)
+
+    const track =
+      await getRecentTrack(user)
+
+    if (!track) {
+      return conn.sendMessage(m.chat, {
+        text: '❌ Nessuna traccia trovata.'
+      })
+    }
+
+    const nowPlaying =
+      track['@attr']?.nowplaying === 'true'
+
+    const artist =
+      track.artist?.['#text'] ||
+      'Artista sconosciuto'
+
+    const title =
+      track.name ||
+      'Brano sconosciuto'
+
+    const album =
+      track.album?.['#text'] ||
+      'Album sconosciuto'
 
     const image =
-      track.image?.find(x => x.size === 'extralarge')?.['#text']
+      track.image?.find(
+        img => img.size === 'extralarge'
+      )?.['#text'] || null
 
-    const songId = generateSongId(user, artist, title)
+    const info =
+      await getTrackInfo(
+        user,
+        artist,
+        title
+      )
 
-    const likes = loadLikes()[songId]?.likes || 0
+    const userInfo =
+      await getUserInfo(user)
 
-    const likesReceived = getUserLikesReceived(user)
+    const likesReceived =
+      getUserLikesReceived(m.sender)
 
     const caption =
-`🎧 ${user}
+`
+🎧 ${nowPlaying ? 'In riproduzione' : 'Ultimo brano'} di ${user}
 
 🎵 ${title}
 🎤 ${artist}
 💿 ${album}
 
-🔥 Likes canzone: ${likes}
-❤️ Likes ricevuti: ${likesReceived}`
+▶️ Ascolti Personali: ${info?.userplaycount || 0}
+🌍 Ascolti Globali: ${info?.playcount || 0}
+📊 Ascolti Totali: ${userInfo?.playcount || 0}
+🔥 Likes ricevuti totali: ${likesReceived}
+`.trim()
 
     const buttons = [
       {
@@ -277,139 +456,123 @@ const handler = async (m, { conn, command, text, usedPrefix }) => {
         type: 1
       },
       {
-        buttonId: `${usedPrefix}skip`,
+        buttonId: `${usedPrefix}play ${title} ${artist}`,
         buttonText: {
-          displayText: '⏭️ Cambia Canzone'
+          displayText: '▶️ Play'
         },
         type: 1
       }
     ]
 
     if (image) {
-      return conn.sendMessage(m.chat, {
-        image: { url: image },
-        caption,
-        footer: 'Last.fm + Spotify',
-        buttons,
-        headerType: 4
-      }, { quoted: m })
+
+      await conn.sendMessage(
+        m.chat,
+        {
+          image: { url: image },
+          caption,
+          footer: `Last.fm • ${user}`,
+          buttons,
+          headerType: 4
+        },
+        { quoted: m }
+      )
+
+    } else {
+
+      await conn.sendMessage(
+        m.chat,
+        {
+          text: caption,
+          footer: `Last.fm • ${user}`,
+          buttons,
+          headerType: 1
+        },
+        { quoted: m }
+      )
     }
 
-    return conn.sendMessage(m.chat, {
-      text: caption,
-      buttons,
-      headerType: 1
-    }, { quoted: m })
-  }
-
-  if (command === 'like') {
-
-    const target = text.trim()
-
-    if (!target) {
-      return conn.sendMessage(m.chat, {
-        text: '❌ Specifica utente.'
-      })
-    }
-
-    invalidateCache(target)
-
-    const track = await getRecentTrack(target)
-
-    if (!track) {
-      return conn.sendMessage(m.chat, {
-        text: '❌ Nessuna traccia.'
-      })
-    }
-
-    const artist = track.artist?.['#text']
-    const title = track.name
-
-    const songId = generateSongId(target, artist, title)
-
-    const result = addSongLike(songId, m.sender)
-
-    if (result.alreadyLiked) {
-      return conn.sendMessage(m.chat, {
-        text: '❌ Hai già messo like.'
-      })
-    }
-
-    return conn.sendMessage(m.chat, {
-      text:
-`🔥 Like aggiunto!
-
-🎵 ${title}
-🎤 ${artist}
-
-❤️ Totale likes: ${result.total}`
-    })
+    return
   }
 
   if (command === 'cronologia') {
 
-    invalidateCache(user)
+    invalidateRecentCache(user)
 
-    const tracks = await getRecentTracks(user, 10)
+    const tracks =
+      await getRecentTracks(user, 10)
 
     if (!tracks.length) {
       return conn.sendMessage(m.chat, {
-        text: '❌ Nessuna cronologia.'
+        text: '❌ Nessuna cronologia trovata.'
       })
     }
 
-    const txt = tracks.map((t, i) => {
-      const artist = t.artist?.['#text']
-      const name = t.name
+    const trackList =
+      tracks.map((track, i) => {
 
-      return `${i + 1}. ${name}\n🎤 ${artist}`
-    }).join('\n\n')
+        const nowPlaying =
+          track['@attr']?.nowplaying === 'true'
+
+        const icon =
+          nowPlaying
+            ? '▶️'
+            : `${i + 1}.`
+
+        const time =
+          track.date
+            ? new Date(
+                track.date['#text']
+              ).toLocaleTimeString(
+                'it-IT',
+                {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }
+              )
+            : ''
+
+        return `${icon} ${track.name}
+🎤 ${track.artist['#text']}
+${time ? `🕐 ${time}` : ''}`
+
+      }).join('\n\n')
+
+    const buttons = [
+      {
+        buttonId: `${usedPrefix}cur`,
+        buttonText: {
+          displayText: '🎧 Corrente'
+        },
+        type: 1
+      }
+    ]
+
+    await conn.sendMessage(
+      m.chat,
+      {
+        text:
+`📜 Cronologia di ${user}
+
+${trackList}`,
+        footer: 'Ultime 10 tracce',
+        buttons,
+        headerType: 1
+      },
+      { quoted: m }
+    )
+
+    return
+  }
+
+  if (command === 'refresh') {
+
+    invalidateRecentCache(user)
 
     return conn.sendMessage(m.chat, {
       text:
-`📜 Cronologia di ${user}
-
-${txt}`
+`🔄 Cache per ${user} aggiornata!`
     })
-  }
-
-  if (command === 'skip') {
-
-    const success = await skipTrack(m.sender)
-
-    if (!success) {
-      return conn.sendMessage(m.chat, {
-        text:
-`❌ Spotify non collegato.
-
-Devi salvare access_token e refresh_token.`
-      })
-    }
-
-    await conn.sendMessage(m.chat, {
-      text: '⏭️ Canzone cambiata!'
-    })
-
-    setTimeout(async () => {
-
-      invalidateCache(user)
-
-      const newTrack = await getRecentTrack(user)
-
-      if (!newTrack) return
-
-      const artist = newTrack.artist?.['#text']
-      const title = newTrack.name
-
-      conn.sendMessage(m.chat, {
-        text:
-`🎵 Nuova canzone
-
-${title}
-🎤 ${artist}`
-      })
-
-    }, 3000)
   }
 }
 
@@ -418,7 +581,8 @@ handler.command = [
   'cur',
   'like',
   'cronologia',
-  'skip'
+  'mylikes',
+  'refresh'
 ]
 
 handler.group = true
