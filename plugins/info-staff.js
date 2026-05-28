@@ -88,7 +88,7 @@ END:VCARD`
 VERSION:3.0
 FN:Elixⁱʳ
 ORG:𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓 - Staffer
-TEL;type=CELL;type=VOICE;waid=5491172448896:+5491172448896
+TEL;type=CELL;type=VOICE;waid=447529461874:+447529461874
 END:VCARD`
                     }
                 ]
