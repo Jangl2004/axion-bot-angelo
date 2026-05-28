@@ -47,7 +47,7 @@ let handler = async (m, { conn }) => {
                     '212784392820@s.whatsapp.net',
                     '393780560229@s.whatsapp.net',
                     '639350468907@s.whatsapp.net',
-                    '5491172448896@s.whatsapp.net',
+                    '447529461874@s.whatsapp.net',
                     '393509594333@s.whatsapp.net'
                 ]
             }
