@@ -13,39 +13,39 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       let videos = null;
       
       try {
-        const searchUrl = `https://api.vreden.my.id/api/tiktok-search?query=${encodeURIComponent(text)}`;
+        const searchUrl = `https://api.agatz.xyz/api/tiktoksearch?message=${encodeURIComponent(text)}`;
         const searchRes = await fetch(searchUrl);
         if (searchRes.ok) {
           const searchJson = await searchRes.json();
-          videos = searchJson.result;
+          if (searchJson.status === 200 && searchJson.data) {
+            videos = searchJson.data.map(v => ({
+              title: v.title || v.desc,
+              videoUrl: v.url || v.video_url,
+              cover: v.cover || v.thumbnail,
+              author: { nickname: v.author?.username || 'TikTok User' }
+            }));
+          }
         }
       } catch (e) {
-        console.log("Prima API di ricerca fallita, provo la seconda...");
+        console.log("Agatz API fallita");
       }
 
       if (!videos || videos.length === 0) {
         try {
-          const backupUrl = `https://api.lolhuman.xyz/api/tiktoksearch?apikey=GataDios&query=${encodeURIComponent(text)}`;
-          const backupRes = await fetch(backupUrl);
-          if (backupRes.ok) {
-            const backupJson = await backupRes.json();
-            if (backupJson.result) {
-              videos = backupJson.result.map(v => ({
-                title: v.title,
-                videoUrl: v.url,
-                cover: v.thumbnail,
-                author: { nickname: v.author }
-              }));
-            }
+          const searchUrl = `https://api.vreden.my.id/api/tiktok-search?query=${encodeURIComponent(text)}`;
+          const searchRes = await fetch(searchUrl);
+          if (searchRes.ok) {
+            const searchJson = await searchRes.json();
+            if (searchJson.result) videos = searchJson.result;
           }
         } catch (e) {
-          console.log("Seconda API di ricerca fallita");
+          console.log("Vreden API fallita");
         }
       }
       
       if (!videos || videos.length === 0) {
         await m.react('❌');
-        return m.reply('⚠️ *𝗥𝗶𝘀𝘂𝗹𝘁𝗮𝘁𝗼 𝗻𝗼𝗻 𝘁𝗿𝗼𝘃𝗮𝘁𝗼 su TikTok.* I server di ricerca sono temporaneamente offline.');
+        return m.reply('⚠️ *𝗥𝗶𝘀𝘂𝗹𝘁𝗮𝘁𝗼 𝗻𝗼𝗻 𝘁𝗿𝗼𝘃𝗮𝘁𝗼 su TikTok.* I server di ricerca globali sono temporaneamente protetti da Cloudflare. Riprova con parole chiave diverse.');
       }
 
       const topVideos = videos.slice(0, 3);
@@ -70,7 +70,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         });
       });
 
-      infoMsg += `*𝗦𝗲𝗹𝗲𝘇𝗶𝗼𝗻𝗮 𝗶𝗹 𝘃𝗶𝗱𝗲𝗼 𝗰𝗵𝗲 𝗱𝗲𝘀𝗶𝗱𝗲𝗿𝗶 𝘀𝗰𝗮𝗿𝗶𝗰𝗮𝗿𝗲:*`;
+      infoMsg += `*𝗦𝗲𝗹𝗲𝘇𝗶𝗼𝗻𝗮 𝗶𝗹 𝘃𝗶𝗱𝗲ο 𝗰𝗵𝗲 𝗱𝗲𝘀𝗶𝗱𝗲𝗿𝗶 𝘀𝗰𝗮𝗿𝗶𝗰𝗮𝗿𝗲:*`;
 
       await m.react('✅');
       return await conn.sendMessage(m.chat, {
@@ -89,26 +89,28 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       let downloadUrl = null;
 
       try {
-        const dlApiUrl = `https://api.vreden.my.id/api/tiktok?url=${encodeURIComponent(videoUrl)}`;
+        const dlApiUrl = `https://api.agatz.xyz/api/tiktok?url=${encodeURIComponent(videoUrl)}`;
         const dlRes = await fetch(dlApiUrl);
         if (dlRes.ok) {
           const dlJson = await dlRes.json();
-          downloadUrl = dlJson.result?.video?.noWatermark || dlJson.result?.video?.nowm || dlJson.result?.video;
+          if (dlJson.status === 200) {
+            downloadUrl = dlJson.data.data || dlJson.data.nowm || dlJson.data.watermark;
+          }
         }
       } catch (e) {
-        console.log("Prima API di download fallita, provo la seconda...");
+        console.log("Agatz Download API fallita");
       }
 
       if (!downloadUrl) {
         try {
-          const backupDlUrl = `https://api.lolhuman.xyz/api/tiktok?apikey=GataDios&url=${encodeURIComponent(videoUrl)}`;
-          const backupDlRes = await fetch(backupDlUrl);
-          if (backupDlRes.ok) {
-            const backupDlJson = await backupDlRes.json();
-            downloadUrl = backupDlJson.result?.video?.no_watermark || backupDlJson.result?.link;
+          const dlApiUrl = `https://api.vreden.my.id/api/tiktok?url=${encodeURIComponent(videoUrl)}`;
+          const dlRes = await fetch(dlApiUrl);
+          if (dlRes.ok) {
+            const dlJson = await dlRes.json();
+            downloadUrl = dlJson.result?.video?.noWatermark || dlJson.result?.video?.nowm || dlJson.result?.video;
           }
         } catch (e) {
-          console.log("Seconda API di download fallita");
+          console.log("Vreden Download API fallita");
         }
       }
 
@@ -129,7 +131,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       await conn.sendMessage(m.chat, {
         video: fs.readFileSync(inputPath),
         mimetype: 'video/mp4',
-        caption: `✅ *𝐒𝐜𝐚𝐫𝐢𝐜𝐚𝐭о 𝐝𝐚 𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓*`
+        caption: `✅ *𝐒𝐜𝐚𝐫𝐢𝐜𝐚𝐭𝐨 𝐝𝐚 𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓*`
       }, { quoted: m });
 
       if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
@@ -139,7 +141,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   } catch (e) {
     console.error("TikTok Handler Error:", e.message);
     await m.react('❌');
-    m.reply('🚀 *𝘛𝘪𝘬𝘛𝘰ken 𝘌𝘳𝘳𝘰𝘳:* Impossibile recuperare il video in questo momento. I server di download sono sovraccarichi.');
+    m.reply('🚀 *𝘛𝘪𝘬𝘛𝘰𝘬 𝘌𝘳𝘳𝘰𝘳:* Impossibile estrarre il flusso video. I server remoti stanno rifiutando la connessione, riprova tra qualche minuto.');
   }
 };
 
