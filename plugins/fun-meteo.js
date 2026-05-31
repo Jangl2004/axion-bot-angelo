@@ -9,14 +9,13 @@ import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import puppeteer from "puppeteer"
 
-// ─── CACHE INTELLIGENTE ───────────────────────────────────────────────────────
-// Struttura: { timestamp, imageBuffer, caption, hits }
-const cache = new Map()
-const CACHE_TTL = 15 * 60 * 1000       // 15 minuti per dati meteo
-const CACHE_MAX_SIZE = 50              // massimo 50 città in cache
-const CACHE_CLEANUP_INTERVAL = 30 * 60 * 1000 // pulizia ogni 30 minuti
 
-// Pulizia automatica delle entry scadute
+const cache = new Map()
+const CACHE_TTL = 15 * 60 * 1000
+const CACHE_MAX_SIZE = 50 
+const CACHE_CLEANUP_INTERVAL = 30 * 60 * 1000
+
+
 setInterval(() => {
   const now = Date.now()
   for (const [key, entry] of cache.entries()) {
@@ -33,7 +32,7 @@ function getCached(key) {
 }
 
 function setCache(key, data) {
-  // Se la cache è piena, rimuove la entry più vecchia
+
   if (cache.size >= CACHE_MAX_SIZE) {
     const oldestKey = [...cache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0]
     cache.delete(oldestKey)
@@ -41,10 +40,10 @@ function setCache(key, data) {
   cache.set(key, { ...data, timestamp: Date.now(), hits: 0 })
 }
 
-// ─── HANDLER PRINCIPALE ───────────────────────────────────────────────────────
+
 let handler = async (m, { conn, args }) => {
 
-  // ✅ Solo nei gruppi
+
   if (!m.isGroup) {
     return conn.reply(m.chat, '❌ Questo comando è disponibile solo nei gruppi.', m)
   }
@@ -71,7 +70,7 @@ _☣️ Previsioni in tempo reale, 100% gratis._`)
   const city = args.join(' ')
   const cityKey = city.toLowerCase().trim()
 
-  // ✅ Controlla cache prima di fare richieste
+
   const cached = getCached(cityKey)
   if (cached) {
     await conn.sendMessage(m.chat, {
@@ -84,7 +83,7 @@ _☣️ Previsioni in tempo reale, 100% gratis._`)
   const loading = await m.reply(`🔍 \`Cerco il meteo di "${city}"...\``)
 
   try {
-    // ─── GEOCODING (gratis, no API key) ───────────────────────────────────────
+
     const geoRes = await axios.get(
       `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=it`,
       { timeout: 8000 }
@@ -103,7 +102,7 @@ _Prova con un nome più specifico._
     const location = geoRes.data.results[0]
     const { latitude, longitude } = location
 
-    // ─── METEO (gratis, no API key) ───────────────────────────────────────────
+
     const weatherRes = await axios.get(
       `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
       `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,` +
@@ -116,7 +115,6 @@ _Prova con un nome più specifico._
 
     const { current, daily, hourly } = weatherRes.data
 
-    // ─── IMMAGINE DI SFONDO GRATUITA (Unsplash Source, no API key) ────────────
     let backgroundImageBase64 = null
     try {
       const searchTerm = encodeURIComponent(location.name.split(',')[0])
@@ -127,7 +125,7 @@ _Prova con un nome più specifico._
       const contentType = imgRes.headers['content-type'] || 'image/jpeg'
       backgroundImageBase64 = `data:${contentType};base64,${Buffer.from(imgRes.data).toString('base64')}`
     } catch {
-      backgroundImageBase64 = null // fallback: solo gradiente colore
+      backgroundImageBase64 = null 
     }
 
     const weatherData = {
@@ -142,7 +140,7 @@ _Prova con un nome più specifico._
 
     const imageBuffer = await generateWeatherImage(weatherData)
 
-    // Caption in stile Elixir con previsioni settimanali
+   
     const weekDays = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
     const weekForecast = Array.from({ length: 5 }, (_, i) => {
       const idx = i + 1
@@ -172,7 +170,7 @@ ${weekForecast}
 │
 *╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`
 
-    // ✅ Salva in cache intelligente
+   
     setCache(cityKey, { imageBuffer, caption })
 
     await conn.sendMessage(m.chat, { image: imageBuffer, caption }, { quoted: m })
@@ -181,7 +179,7 @@ ${weekForecast}
   } catch (e) {
     await conn.sendMessage(m.chat, { delete: loading.key }).catch(() => {})
 
-    // ✅ Gestione errori dettagliata
+
     let errorMsg = `┏━━━━━━━━━━━━━━━━━━━━┓
  💉 ᴇʟɪxɪʀ - ᴇʀʀᴏʀᴇ 💉
 ┗━━━━━━━━━━━━━━━━━━━━┛
@@ -203,14 +201,14 @@ ${weekForecast}
   }
 }
 
-// ─── GENERAZIONE IMMAGINE ─────────────────────────────────────────────────────
+
 async function generateWeatherImage(weatherData) {
   let browser
   try {
     const htmlContent = renderToStaticMarkup(React.createElement(WeatherCard, { weatherData }))
     const fullHtml = createFullHtmlTemplate(htmlContent, weatherData)
 
-    // Tenta browser locale prima, altrimenti lancia errore chiaro
+ 
     try {
       browser = await puppeteer.launch({
         headless: true,
@@ -230,7 +228,7 @@ async function generateWeatherImage(weatherData) {
   }
 }
 
-// ─── TEMPLATE HTML ────────────────────────────────────────────────────────────
+
 function createFullHtmlTemplate(componentHtml, weatherData) {
   const { weatherColors } = weatherData
   return `<!DOCTYPE html>
@@ -270,7 +268,7 @@ function createFullHtmlTemplate(componentHtml, weatherData) {
 </html>`
 }
 
-// ─── COMPONENTE REACT ─────────────────────────────────────────────────────────
+
 const WeatherCard = ({ weatherData }) => {
   const { location, country, current, daily, hourly, backgroundImageBase64 } = weatherData
 
@@ -350,7 +348,7 @@ function detail(key, icon, label, value) {
   ])
 }
 
-// ─── UTILITY ──────────────────────────────────────────────────────────────────
+
 function getWeatherIcon(code) {
   if (code <= 1) return '☀️'
   if (code === 2) return '⛅'
@@ -401,7 +399,7 @@ function getWeatherColorScheme(code, isDay) {
   return { background: { primary: '#37474F', secondary: '#546E7A' }, overlay: { primary: 'rgba(0,0,0,0.5)', secondary: 'rgba(0,0,0,0.7)' }, temperature: { main: '#fff' }, text: { primary: '#fff', secondary: '#ECEFF1' }, cards: { background: 'rgba(255,255,255,0.18)', border: 'rgba(255,255,255,0.3)' } }
 }
 
-// ─── METADATI ─────────────────────────────────────────────────────────────────
+
 handler.help = ['meteo <città>']
 handler.tags = ['strumenti']
 handler.command = ['meteo', 'clima', 'weather']
