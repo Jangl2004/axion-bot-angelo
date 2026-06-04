@@ -18,13 +18,23 @@ const testoBomba=(sender,tempo)=>`*💣 𝐁𝐎𝐌𝐁𝐀 𝐈𝐍𝐍𝐄�
 > *passa @utente*
 > *oppure rispondi con passa*`
 
-function scegliUtenteCasuale(m){
+function cleanJid(conn,jid=''){
+return conn.decodeJid(String(jid||''))
+}
+
+function isValidUserJid(jid){
+return jid&&jid.endsWith('@s.whatsapp.net')&&!jid.includes('@lid')
+}
+
+function scegliUtenteCasuale(conn,m,participants=[]){
 const mentioned=m.mentionedJid?.[0]
 const quoted=m.quoted?.sender||m.quoted?.participant
-if(mentioned)return mentioned
-if(quoted)return quoted
-const participants=m.metadata?.participants||m.groupMetadata?.participants||[]
-const users=participants.map(p=>p.id||p.jid).filter(j=>j&&j!==m.sender&&!j.includes(global.conn?.user?.id?.split(':')[0]||''))
+if(mentioned&&isValidUserJid(mentioned))return mentioned
+if(quoted&&isValidUserJid(quoted))return quoted
+const botJid=cleanJid(conn,conn.user?.jid||'')
+const users=(participants||[])
+.map(p=>cleanJid(conn,p.id||p.jid||''))
+.filter(j=>isValidUserJid(j)&&j!==m.sender&&j!==botJid)
 return users.length?users[rand(0,users.length-1)]:m.sender
 }
 
@@ -39,12 +49,9 @@ await conn.sendMessage(chat,{text:testoBomba(b.vittima,tempo),mentions:[b.vittim
 async function avviaBomba(conn,chat,sender,m=null,editKey=null){
 if(bombaInCorso[chat])return false
 const durata=rand(DURATA_MIN,DURATA_MAX),scadenza=Date.now()+durata*1000
-
 bombaInCorso[chat]={vittima:sender,passaggi:[],storico:[],scadenza,msgKey:editKey||null,ticker:null,timer:setTimeout(()=>esplosione(chat,conn,m),durata*1000)}
-
 const msg={text:testoBomba(sender,durata),mentions:[sender],footer:'𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓'}
 if(editKey)msg.edit=editKey
-
 const sent=await conn.sendMessage(chat,msg,m&&!editKey?{quoted:m}:{})
 bombaInCorso[chat].msgKey=editKey||sent?.key||null
 bombaInCorso[chat].ticker=setInterval(()=>aggiornaBomba(conn,chat),UPDATE_MS)
@@ -53,21 +60,15 @@ return true
 
 let handler=async(m,{conn,command,participants})=>{
 const chat=m.chat
-
 if(command==='bomba'){
 if(bombaInCorso[chat])return m.reply('*⚠️ 𝐂’è già una bomba attiva.*')
-
 global.cooldowns??={}
 const key=`bomba_${chat}`,now=Date.now()
-
 if(now-(global.cooldowns[key]||0)<COOLDOWN_MS)return m.reply('*⏳ Aspetta un attimo.*')
 
-let target=m.mentionedJid?.[0]||m.quoted?.sender||m.quoted?.participant||null
+let target=scegliUtenteCasuale(conn,m,participants)
 
-if(!target){
-const users=(participants||[]).map(p=>conn.decodeJid(p.id||p.jid)).filter(j=>j&&j!==m.sender&&j!==conn.user?.jid)
-target=users.length?users[rand(0,users.length-1)]:m.sender
-}
+if(!target)return m.reply('*❌ Nessun utente valido trovato.*')
 
 global.cooldowns[key]=now
 
@@ -82,7 +83,6 @@ return avviaBomba(conn,chat,target,m,sent.key)
 
 handler.before=async function(m,{conn}){
 if(!m||!m.chat||!m.sender||m.fromMe||m.isBaileys)return
-
 const chat=m.chat,b=bombaInCorso[chat]
 if(!b||!m.text||m.sender!==b.vittima)return
 
@@ -90,7 +90,10 @@ const txt=m.text.toLowerCase().trim()
 if(!txt.startsWith('passa'))return
 
 let target=m.mentionedJid?.[0]||m.quoted?.sender||m.quoted?.participant||null
-if(!target||target===m.sender||target===conn.user?.jid)return
+target=cleanJid(conn,target)
+
+const botJid=cleanJid(conn,conn.user?.jid||'')
+if(!isValidUserJid(target)||target===m.sender||target===botJid)return
 
 let tempo=b.scadenza-Date.now()
 if(tempo<=500)return
@@ -123,7 +126,6 @@ return true
 async function esplosione(chatId,conn,m){
 const b=bombaInCorso[chatId]
 if(!b)return
-
 clearInterval(b.ticker)
 
 const cilecca=Math.random()<0.08
