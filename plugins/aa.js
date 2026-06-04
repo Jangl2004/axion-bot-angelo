@@ -1,11 +1,16 @@
+
 import twilio from 'twilio';
 
-const TWILIO_ACCOUNT_SID = 'USf7330ed821df3dc9a3212aefaa1425b8';
-const TWILIO_AUTH_TOKEN = '755Q2TFN611F39CX6AVZLR8S';
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 
 const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
 let handler = async (m, { args, usedPrefix, command }) => {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+    return m.reply('*❌ Errore:* Configurazione Twilio mancante nel server.');
+  }
+
   if (!args[0]) {
     return m.reply(`*🔍 USO:* ${usedPrefix}${command} <numero>\n*Esempio:* ${usedPrefix}${command} +393471234567`);
   }
@@ -29,7 +34,7 @@ let handler = async (m, { args, usedPrefix, command }) => {
     const carrierData = lookup.lineTypeIntelligence || {};
     const identityData = lookup.identityMatch || {};
 
-    let replyMsg = `*📱 OSINT LOOKUP v2*\n`;
+    let replyMsg = `*📱 TWILIO OSINT LOOKUP v2*\n`;
     replyMsg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
     replyMsg += `• *Numero Formattato:* \`${lookup.phoneNumber}\`\n\n`;
 
@@ -49,7 +54,7 @@ let handler = async (m, { args, usedPrefix, command }) => {
     replyMsg += `💡 _Consiglio OSINT:_ Per verificare manualmente i social, puoi provare a salvare il numero in rubrica per vedere se appare su Telegram/WhatsApp o simulare un recupero password su Instagram.\n\n`;
 
     replyMsg += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    replyMsg += `> *𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓*`;
+    replyMsg += `> *𝛥𝐗𝐈𝚶𝐍 𝚩𝚯𝐓 — TWILIO REPORT*`;
 
     await m.reply(replyMsg.trim());
     await m.react('✅');
