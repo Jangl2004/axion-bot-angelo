@@ -434,21 +434,14 @@ if (!fs.existsSync(`./${authFile}/creds.json`)) {
                 addNumber = phoneNumber.replace(/\D/g, '');
                 if (!phoneNumber.startsWith('+')) phoneNumber = `+${phoneNumber}`;
             }
-
             setTimeout(async () => {
-                try {
-                    let codeBot = await conn.requestPairingCode(addNumber);
-                    codeBot = codeBot?.match(/.{1,4}/g)?.join("-") || codeBot;
-                    console.log('\n' + chalk.bold.white(chalk.bgHex('#00CED1')(' 📞 CODICE DI ABBINAMENTO ')));
-                    console.log(chalk.bold.white(chalk.hex('#2ECC71')(` >>> ${codeBot} <<<\n`)));
-                } catch (error) {
-                    console.error(chalk.bold.red('Errore critico durante la generazione del codice:'), error);
-                }
+                let codeBot = await conn.requestPairingCode(addNumber, 'AXIONBOT');
+                codeBot = codeBot?.match(/.{1,4}/g)?.join("-") || codeBot;
+                console.log(chalk.bold.white(chalk.bgHex('#00CED1')('📞 CODICE DI ABBINAMENTO:')), chalk.bold.white(chalk.hex('#2ECC71')(codeBot)));
             }, 3000);
         }
     }
 }
-
 conn.isInit = false;
 if (!opts['test']) {
     if (global.db) setInterval(async () => {
