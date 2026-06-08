@@ -54,7 +54,7 @@ handler.before=async function(m,{conn,isAdmin,isOwner,isBotAdmin,isROwner}){
     const s=result?.category_scores||{}
     const violence=Number(s.violence||0)
     const graphic=Number(s['violence/graphic']||0)
-    const isHighRisk=graphic>0.30||violence>0.50
+    const isHighRisk=graphic>=0.35||(graphic>=0.25&&violence>=0.60)||violence>=0.75
 
     global.db.data.goreCache[fileHash]=isHighRisk
 
@@ -138,7 +138,7 @@ async function punishUser(conn,m,isBotAdmin,reason){
 
 *⛔️ 𝐑𝐢𝐦𝐨𝐬𝐬𝐨 𝐝𝐚𝐥 𝐠𝐫𝐮𝐩𝐩𝐨*
 
-*📌 𝐌𝐨𝐭𝐢𝐯𝐨:* *𝐂𝐨𝐧𝐭𝐞𝐧𝐮𝐭𝐢 𝐠𝐫𝐚𝐟𝐢𝐜𝐢 / 𝐯𝐢𝐨𝐥𝐞𝐧𝐭𝐢*`),
+*📌 𝐌𝐨𝐭𝐢𝐯𝐨:* *'𝐂𝐨𝐧𝐭𝐞𝐧𝐮𝐭𝐨 𝐠𝐫𝐚𝐟𝐢𝐜𝐨 𝐫𝐢𝐥𝐞𝐯𝐚𝐭𝐨'*`),
     thumb:'antigore',
     mentions:[m.sender],
     quoted:m

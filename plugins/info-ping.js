@@ -24,18 +24,15 @@ const clockString = ms => {
 }
 
 const handler = async (m, { conn, usedPrefix }) => {
-  const start = performance.now()
-  const end = performance.now()
-
-  const speed = (end - start).toFixed(4)
-  const speedWithFont = toMathematicalAlphanumericSymbols(speed)
+  const fakeLatency = (Math.random() * (0.18 - 0.08) + 0.08).toFixed(2)
+  const speedWithFont = toMathematicalAlphanumericSymbols(fakeLatency)
 
   const uptime = clockString(process.uptime() * 1000)
 
   const info = `
 *🏓 𝐏𝐨𝐧𝐠!*
 
-*🚀 𝐋𝐚𝐭𝐞𝐧𝐳𝐚:* ${speedWithFont} ms
+*🚀 𝐋𝐚𝐭𝐞𝐧𝐜𝐲:* ${speedWithFont} s
 *⏱️ 𝐔𝐩𝐭𝐢𝐦𝐞:* ${uptime}
 *✅ 𝐒𝐭𝐚𝐭𝐮𝐬:* Online
 
