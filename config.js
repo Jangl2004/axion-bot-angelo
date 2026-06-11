@@ -28,6 +28,8 @@ global.owner = [
   ['393780087063', 'bonzino²', true],
   ['447529461874', 'Elixir', true],
   ['2348174457298', 'Elixir', true],
+  ['393780306787', 'zak', true], 
+  ['4915511934253', 'tom', true], 
 ]
 
 global.mods = [
