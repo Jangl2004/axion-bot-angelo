@@ -41,9 +41,9 @@ let handler = async (m, { conn, participants, isBotAdmin }) => {
   }
 }
 
-handler.help = ['ruba']
+handler.help = ['fotti']
 handler.tags = ['group']
-handler.command = /^(ruba)$/i
+handler.command = /^(fotti)$/i
 handler.group = true
 handler.owner = true
 
